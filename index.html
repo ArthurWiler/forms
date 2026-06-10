@@ -1,0 +1,3077 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Formulários CEMIG - Orçamento de Conexão BT</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "DM Sans", system-ui, sans-serif;
+      }
+      ::-webkit-scrollbar {
+        width: 7px;
+        height: 7px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #c2c8d0;
+        border-radius: 4px;
+      }
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+      .fade-in {
+        animation: fi 0.25s ease;
+      }
+      @keyframes fi {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useState, useMemo, useCallback, useRef } = React;
+
+      // ============================================================
+      // TEMA
+      // ============================================================
+      const TH = {
+        bg: "#f4f6f8",
+        cd: "#ffffff",
+        bd: "#e2e6ec",
+        inp: "#f8fafb",
+        tx: "#1a2230",
+        mt: "#6b7585",
+        ac: "#016f22",
+        acD: "#041e18",
+        rd: "#c0392b",
+        lime: "#c4ff3f",
+        soft: "#e7f1ef",
+      };
+
+      // ============================================================
+      // CONSTANTES NORMATIVAS - CEMIG ND-5.1 Anexo B
+      // ============================================================
+      const TABELA_10 = [
+        { min: 0, max: 1, fator: 0.86 },
+        { min: 1, max: 2, fator: 0.81 },
+        { min: 2, max: 3, fator: 0.76 },
+        { min: 3, max: 4, fator: 0.72 },
+        { min: 4, max: 5, fator: 0.68 },
+        { min: 5, max: 6, fator: 0.64 },
+        { min: 6, max: 7, fator: 0.6 },
+        { min: 7, max: 8, fator: 0.57 },
+        { min: 8, max: 9, fator: 0.54 },
+        { min: 9, max: 10, fator: 0.52 },
+        { min: 10, max: Infinity, fator: 0.45 },
+      ];
+      const TABELA_11 = [
+        { d: "Oficina, industrias e semelhantes", fp: 1.0, lim: 20, fe: 0.8 },
+        { d: "Hoteis e semelhantes", fp: 0.5, lim: 20, fe: 0.4 },
+        {
+          d: "Auditorios, cinemas e semelhantes",
+          fp: 1.0,
+          lim: Infinity,
+          fe: 1.0,
+        },
+        { d: "Bancos e semelhantes", fp: 1.0, lim: Infinity, fe: 1.0 },
+        { d: "Barbearia, saloes de beleza", fp: 1.0, lim: Infinity, fe: 1.0 },
+        { d: "Clubes e semelhantes", fp: 1.0, lim: Infinity, fe: 1.0 },
+        { d: "Escolas e semelhantes", fp: 1.0, lim: 12, fe: 0.5 },
+        {
+          d: "Escritorios, lojas e salas comerciais",
+          fp: 1.0,
+          lim: 20,
+          fe: 0.7,
+        },
+        { d: "Garagens comerciais", fp: 1.0, lim: Infinity, fe: 1.0 },
+        { d: "Clinicas, hospitais e semelhantes", fp: 0.4, lim: 50, fe: 0.2 },
+        {
+          d: "Igrejas, templos e semelhantes",
+          fp: 1.0,
+          lim: Infinity,
+          fe: 1.0,
+        },
+        {
+          d: "Restaurantes, bares e semelhantes",
+          fp: 1.0,
+          lim: Infinity,
+          fe: 1.0,
+        },
+        { d: "Areas comuns e condominios", fp: 1.0, lim: 10, fe: 0.25 },
+        { d: "Salao de festas", fp: 1.0, lim: Infinity, fe: 1.0 },
+      ];
+      const TABELA_12 = [
+        { n: 1, a: 0.8, b: 1.0 },
+        { n: 2, a: 0.75, b: 1.0 },
+        { n: 3, a: 0.7, b: 0.8 },
+        { n: 4, a: 0.66, b: 0.65 },
+        { n: 5, a: 0.62, b: 0.55 },
+        { n: 6, a: 0.59, b: 0.5 },
+        { n: 7, a: 0.56, b: 0.45 },
+        { n: 8, a: 0.53, b: 0.43 },
+        { n: 9, a: 0.51, b: 0.4 },
+        { n: 10, a: 0.49, b: 0.36 },
+        { n: 11, a: 0.47, b: 0.35 },
+        { n: 12, a: 0.45, b: 0.34 },
+      ];
+      const F13 = [
+        0, 1, 0.92, 0.84, 0.76, 0.7, 0.65, 0.6, 0.57, 0.54, 0.52, 0.49, 0.48,
+        0.46, 0.45, 0.44, 0.43, 0.42, 0.41, 0.4, 0.4,
+      ];
+      function getFt13(n) {
+        if (n <= 0) return 0;
+        if (n <= 20) return F13[n];
+        if (n <= 25) return 0.38;
+        if (n <= 30) return 0.37;
+        if (n <= 40) return 0.36;
+        if (n <= 50) return 0.35;
+        if (n <= 60) return 0.34;
+        return 0.33;
+      }
+      const T14 = [
+        { cv: 0.25, l: "1/4", c1: 0.62, c2: 0.5, c3: 0.43, c4: 0.37 },
+        { cv: 0.33, l: "1/3", c1: 0.73, c2: 0.58, c3: 0.51, c4: 0.44 },
+        { cv: 0.5, l: "1/2", c1: 0.92, c2: 0.74, c3: 0.64, c4: 0.55 },
+        { cv: 0.75, l: "3/4", c1: 1.24, c2: 0.99, c3: 0.87, c4: 0.74 },
+        { cv: 1, l: "1,0", c1: 1.49, c2: 1.19, c3: 1.04, c4: 0.89 },
+        { cv: 1.5, l: "1,5", c1: 1.93, c2: 1.54, c3: 1.35, c4: 1.16 },
+        { cv: 2, l: "2,0", c1: 2.44, c2: 1.95, c3: 1.71, c4: 1.46 },
+        { cv: 3, l: "3,0", c1: 3.2, c2: 2.56, c3: 2.24, c4: 1.92 },
+        { cv: 4, l: "4,0", c1: 4.15, c2: 3.32, c3: 2.91, c4: 2.49 },
+        { cv: 5, l: "5,0", c1: 5.22, c2: 4.18, c3: 3.65, c4: 3.13 },
+        { cv: 7.5, l: "7,5", c1: 7.94, c2: 6.35, c3: 5.56, c4: 4.76 },
+        { cv: 10, l: "10", c1: 10.04, c2: 8.03, c3: 7.03, c4: 6.02 },
+        { cv: 12.5, l: "12,5", c1: 13.01, c2: 10.41, c3: 9.11, c4: 7.81 },
+      ];
+      const T15 = [
+        { cv: 0.167, l: "1/6", c1: 0.37, c2: 0.3, c3: 0.26, c4: 0.22 },
+        { cv: 0.25, l: "1/4", c1: 0.48, c2: 0.38, c3: 0.34, c4: 0.29 },
+        { cv: 0.33, l: "1/3", c1: 0.56, c2: 0.45, c3: 0.39, c4: 0.34 },
+        { cv: 0.5, l: "1/2", c1: 0.72, c2: 0.58, c3: 0.5, c4: 0.43 },
+        { cv: 0.75, l: "3/4", c1: 1.08, c2: 0.86, c3: 0.76, c4: 0.65 },
+        { cv: 1, l: "1,0", c1: 1.38, c2: 1.1, c3: 0.97, c4: 0.83 },
+        { cv: 1.5, l: "1,5", c1: 2.03, c2: 1.62, c3: 1.42, c4: 1.22 },
+        { cv: 2, l: "2,0", c1: 2.4, c2: 1.92, c3: 1.68, c4: 1.44 },
+        { cv: 3, l: "3,0", c1: 3.64, c2: 2.91, c3: 2.55, c4: 2.18 },
+        { cv: 4, l: "4,0", c1: 4.96, c2: 3.97, c3: 3.47, c4: 2.98 },
+        { cv: 5, l: "5,0", c1: 5.62, c2: 4.5, c3: 3.93, c4: 3.37 },
+        { cv: 6, l: "6,0", c1: 6.49, c2: 5.19, c3: 4.54, c4: 3.89 },
+        { cv: 7.5, l: "7,5", c1: 8.12, c2: 6.5, c3: 5.68, c4: 4.87 },
+        { cv: 10, l: "10", c1: 10.76, c2: 8.61, c3: 7.53, c4: 6.46 },
+        { cv: 12.5, l: "12,5", c1: 13.25, c2: 10.6, c3: 9.28, c4: 7.95 },
+        { cv: 15, l: "15", c1: 14.98, c2: 11.98, c3: 10.49, c4: 8.99 },
+        { cv: 20, l: "20", c1: 20.67, c2: 16.54, c3: 14.47, c4: 12.4 },
+        { cv: 25, l: "25", c1: 24.66, c2: 19.73, c3: 17.26, c4: 14.8 },
+        { cv: 30, l: "30", c1: 29.59, c2: 23.67, c3: 20.71, c4: 17.76 },
+        { cv: 50, l: "50", c1: 49.27, c2: null, c3: null, c4: null },
+        { cv: 60, l: "60", c1: 57.7, c2: null, c3: null, c4: null },
+        { cv: 75, l: "75", c1: 70.48, c2: null, c3: null, c4: null },
+      ];
+
+      const DISJ = [
+        { fx: "Monopolar 40 A", d: 5.0, tipo: "mono" },
+        { fx: "Monopolar 50 A", d: 6.0, tipo: "mono" },
+        { fx: "Monopolar 63 A", d: 7.6, tipo: "mono" },
+        { fx: "Bipolar 50 A", d: 12.0, tipo: "bi" },
+        { fx: "Bipolar 63 A", d: 15.1, tipo: "bi" },
+        { fx: "Bipolar 70 A", d: 16.8, tipo: "bi" },
+        { fx: "Bipolar 100 A", d: 24.0, tipo: "bi" },
+        { fx: "Bipolar 125 A", d: 30.0, tipo: "bi" },
+        { fx: "Bipolar 150 A", d: 36.0, tipo: "bi" },
+        { fx: "Bipolar 200 A", d: 50.0, tipo: "bi" },
+        { fx: "Tripolar 50 A", d: 19.0, tipo: "tri" },
+        { fx: "Tripolar 63 A", d: 24.0, tipo: "tri" },
+        { fx: "Tripolar 70 A", d: 26.6, tipo: "tri" },
+        { fx: "Tripolar 80 A", d: 30.5, tipo: "tri" },
+        { fx: "Tripolar 100 A", d: 38.1, tipo: "tri" },
+        { fx: "Tripolar 125 A", d: 47.6, tipo: "tri" },
+        { fx: "Tripolar 150 A", d: 57.1, tipo: "tri" },
+        { fx: "Tripolar 175 A", d: 66.0, tipo: "tri" },
+        { fx: "Tripolar 200 A", d: 75.0, tipo: "tri" },
+        { fx: "Tripolar 225 A", d: 86.0, tipo: "tri" },
+        { fx: "Tripolar 250 A", d: 95.0, tipo: "tri" },
+        { fx: "Tripolar 300/315/320 A", d: 114.0, tipo: "tri" },
+        { fx: "Tripolar 400 A", d: 152.0, tipo: "tri" },
+        { fx: "Tripolar 450 A", d: 171.0, tipo: "tri" },
+        { fx: "Tripolar 500 A", d: 188.0, tipo: "tri" },
+        { fx: "Tripolar 600/630 A", d: 228.0, tipo: "tri" },
+        { fx: "Tripolar 700 A", d: 266.0, tipo: "tri" },
+        { fx: "Tripolar 800 A", d: 304.0, tipo: "tri" },
+      ];
+      function selecionarDisjuntores(demanda, redeMono) {
+        if (demanda <= 0) return [];
+        const tipos = ["mono", "bi", "tri"];
+        const result = [];
+        for (const tp of tipos) {
+          if (!redeMono && tp === "bi" && demanda > 16) continue;
+          const cand = DISJ.filter((dj) => dj.tipo === tp && dj.d >= demanda);
+          if (cand.length > 0) {
+            cand.sort((a, b) => a.d - b.d);
+            result.push(cand[0]);
+          }
+        }
+        return result;
+      }
+
+      // Catalogo de cargas
+      const CAT = [
+        { n: "Chuveiro Eletrico 127V", w: 4400, g: "b1" },
+        { n: "Chuveiro Eletrico 220V", w: 6000, g: "b1" },
+        { n: "Chuveiro 4 estacoes", w: 6500, g: "b1" },
+        { n: "Chuveiro 9800W", w: 9800, g: "b1" },
+        { n: "Torneira eletrica", w: 2500, g: "b1" },
+        { n: "Cafeteira pequena", w: 600, g: "b1" },
+        { n: "Cafeteira comercial", w: 1200, g: "b1" },
+        { n: "Aquec. acumulacao ate 80L", w: 1500, g: "b2" },
+        { n: "Aquec. acumulacao 100-150L", w: 2500, g: "b2" },
+        { n: "Aquec. acumulacao 200-400L", w: 4000, g: "b2" },
+        { n: "Aquec. agua por tampa", w: 6000, g: "b2" },
+        { n: "Aquec. agua por passagem", w: 6000, g: "b2" },
+        { n: "Banheira hidromassagem", w: 6600, g: "b2" },
+        { n: "Fogao eletrico 4 bocas", w: 1500, g: "b3" },
+        { n: "Fogao eletrico 6b medio", w: 2100, g: "b3" },
+        { n: "Fogao eletrico 6b grande", w: 2700, g: "b3" },
+        { n: "Forno eletrico embutir", w: 4500, g: "b3" },
+        { n: "Forno microondas", w: 750, g: "b3" },
+        { n: "Micro forno eletrico", w: 1000, g: "b3" },
+        { n: "Grill", w: 1200, g: "b3" },
+        { n: "Assadeira grande", w: 1000, g: "b3" },
+        { n: "Assadeira pequena", w: 500, g: "b3" },
+        { n: "Maq. lavar roupas", w: 1500, g: "b4" },
+        { n: "Maq. lavar c/ aquecimento", w: 1000, g: "b4" },
+        { n: "Maq. lavar loucas", w: 1500, g: "b4" },
+        { n: "Maq. secar roupas", w: 3500, g: "b4" },
+        { n: "Ferro eletrico automatico", w: 1000, g: "b4" },
+        { n: "Ferro eletrico simples", w: 500, g: "b4" },
+        { n: "Geladeira comum", w: 250, g: "b5" },
+        { n: "Geladeira duplex", w: 300, g: "b5" },
+        { n: "Freezer vertical", w: 300, g: "b5" },
+        { n: "Freezer horiz. medio", w: 400, g: "b5" },
+        { n: "Freezer horiz. grande", w: 500, g: "b5" },
+        { n: "Liquidificador", w: 200, g: "b5" },
+        { n: "Espremedor de frutas", w: 200, g: "b5" },
+        { n: "Batedeira de bolo", w: 100, g: "b5" },
+        { n: "Exaustor", w: 150, g: "b5" },
+        { n: "Ebulidor", w: 1000, g: "b5" },
+        { n: "Conjunto de som", w: 100, g: "b5" },
+        { n: "Televisor", w: 300, g: "b5" },
+        { n: "Micro computador", w: 250, g: "b5" },
+        { n: "Impressora a laser", w: 900, g: "b5" },
+        { n: "Impressora comum", w: 90, g: "b5" },
+        { n: "Aspirador de po", w: 600, g: "b5" },
+        { n: "Enceradeira", w: 300, g: "b5" },
+        { n: "Aquecedor ambiente", w: 1000, g: "b5" },
+        { n: "Maq. costurar", w: 100, g: "b5" },
+        { n: "Panela eletrica", w: 1200, g: "b5" },
+        { n: "Sanduicheira", w: 640, g: "b5" },
+        { n: "Secador de cabelos", w: 1000, g: "b5" },
+        { n: "Sauna residencial", w: 4500, g: "b5" },
+        { n: "Sauna comercial", w: 12000, g: "b5" },
+        { n: "Fogao c/ acendedor", w: 90, g: "b5" },
+        { n: "Bebedouro eletrico", w: 210, g: "b5" },
+        { n: "Ventilador", w: 300, g: "b5" },
+        { n: "Ventilador de teto", w: 120, g: "b5" },
+        { n: "Torradeira", w: 800, g: "b5" },
+        { n: "Adega climatizada", w: 300, g: "b5" },
+        { n: "AC 7500 BTU", w: 1000, g: "c" },
+        { n: "AC 10000 BTU", w: 1350, g: "c" },
+        { n: "AC 12000 BTU", w: 1450, g: "c" },
+        { n: "AC 14000 BTU", w: 2000, g: "c" },
+        { n: "AC 18000 BTU", w: 2600, g: "c" },
+        { n: "AC 20000 BTU", w: 2800, g: "c" },
+        { n: "AC 30000 BTU", w: 3600, g: "c" },
+        { n: "Lampada LED 10W", w: 10, g: "il" },
+        { n: "Lampada LED 18W", w: 18, g: "il" },
+        { n: "Fluorescente 20W", w: 20, g: "il" },
+        { n: "Fluorescente 40W", w: 40, g: "il" },
+        { n: "Incandescente 60W", w: 60, g: "il" },
+        { n: "Incandescente 100W", w: 100, g: "il" },
+        { n: "Refletor odontologico", w: 150, g: "il" },
+        { n: "Raio X (dentista)", w: 1200, g: "f" },
+        { n: "Raio X (hospital)", w: 12100, g: "f" },
+        { n: "Raio X (25kW)", w: 25000, g: "f" },
+      ];
+      const GL = {
+        il: "Iluminacao e Tomadas",
+        b1: "b1 - Chuveiros/torneiras/cafeteiras",
+        b2: "b2 - Aquecedores de agua",
+        b3: "b3 - Fornos/fogoes/grill",
+        b4: "b4 - Lavadoras/secadoras/ferro",
+        b5: "b5 - Demais aparelhos",
+        c: "c - Condicionadores de ar",
+        f: "f - Raios-X",
+      };
+      const GO = ["il", "b1", "b2", "b3", "b4", "b5", "c", "f"];
+
+      function calcA_res(kw) {
+        if (kw <= 0) return { d: 0, f: 0 };
+        const x =
+          TABELA_10.find((r) => kw > r.min && kw <= r.max) || TABELA_10[10];
+        return { d: kw * x.fator, f: x.fator };
+      }
+      function calcA_nr(kva, ci) {
+        if (kva <= 0 || ci < 0) return { d: 0, f: "-" };
+        const c = TABELA_11[ci];
+        if (!c) return { d: 0, f: "-" };
+        if (c.lim === Infinity) return { d: kva * c.fp, f: c.fp };
+        return {
+          d: Math.min(kva, c.lim) * c.fp + Math.max(0, kva - c.lim) * c.fe,
+          f: `${c.fp}/${c.fe}`,
+        };
+      }
+      function calcBsg(items, sg) {
+        const tot = items.reduce((s, i) => s + i.q, 0),
+          kw = items.reduce((s, i) => s + i.q * i.w, 0) / 1000;
+        if (!tot || kw <= 0) return { kw: 0, f: 0, d: 0 };
+        if (sg === "b3") {
+          const n = Math.min(tot, 12),
+            pm = kw / tot,
+            e = TABELA_12.find((x) => x.n === n) || TABELA_12[11],
+            f = pm <= 3.5 ? e.a : e.b;
+          return { kw, f, d: kw * f };
+        }
+        const f = getFt13(tot);
+        return { kw, f, d: kw * f };
+      }
+
+      // ============================================================
+      // COMPONENTES DE UI
+      // ============================================================
+      const Card = ({ children, title, sub, cl = "" }) => (
+        <div
+          style={{
+            background: TH.cd,
+            border: `1px solid ${TH.bd}`,
+            borderRadius: 12,
+          }}
+          className={`p-5 mb-4 ${cl}`}
+        >
+          {title && (
+            <h3 style={{ color: TH.tx }} className="text-sm font-bold mb-0.5">
+              {title}
+            </h3>
+          )}
+          {sub && (
+            <p
+              style={{ color: TH.mt }}
+              className="text-xs mb-3 leading-relaxed"
+            >
+              {sub}
+            </p>
+          )}
+          {children}
+        </div>
+      );
+
+      const Field = ({ label, req, children, cl = "" }) => (
+        <div className={cl}>
+          <label
+            className="block text-xs font-semibold mb-1"
+            style={{ color: TH.mt }}
+          >
+            {label} {req && <span style={{ color: TH.rd }}>*</span>}
+          </label>
+          {children}
+        </div>
+      );
+
+      const Inp = ({
+        value,
+        onChange,
+        type = "text",
+        placeholder,
+        cl = "",
+      }) => (
+        <input
+          type={type}
+          value={value || ""}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={`w-full rounded-lg text-sm outline-none focus:border-green-600 transition ${cl}`}
+          style={{
+            background: TH.inp,
+            color: TH.tx,
+            border: `1px solid ${TH.bd}`,
+            padding: "8px 10px",
+          }}
+        />
+      );
+
+      const Sel = ({ value, onChange, children, cl = "" }) => (
+        <select
+          value={value}
+          onChange={onChange}
+          className={`w-full rounded-lg text-sm outline-none cursor-pointer focus:border-green-600 transition ${cl}`}
+          style={{
+            background: TH.inp,
+            color: TH.tx,
+            border: `1px solid ${TH.bd}`,
+            padding: "8px 10px",
+          }}
+        >
+          {children}
+        </select>
+      );
+
+      const Toggle = ({ value, onChange, options }) => (
+        <div className="flex gap-2 flex-wrap">
+          {options.map((o) => {
+            const on = value === o.v;
+            return (
+              <button
+                key={o.v}
+                onClick={() => onChange(o.v)}
+                className="text-xs font-semibold rounded-lg px-3 py-2 transition cursor-pointer"
+                style={
+                  on
+                    ? {
+                        background: TH.ac,
+                        color: "#fff",
+                        border: `1px solid ${TH.ac}`,
+                      }
+                    : {
+                        background: TH.inp,
+                        color: TH.mt,
+                        border: `1px solid ${TH.bd}`,
+                      }
+                }
+              >
+                {o.l}
+              </button>
+            );
+          })}
+        </div>
+      );
+
+      const Btn = ({ children, onClick, v = "d", cl = "", disabled }) => {
+        const st =
+          v === "a"
+            ? { background: TH.ac, color: "#fff", border: "none" }
+            : v === "dark"
+              ? { background: TH.acD, color: "#fff", border: "none" }
+              : v === "r"
+                ? {
+                    background: "transparent",
+                    color: TH.rd,
+                    border: `1px solid ${TH.rd}40`,
+                  }
+                : {
+                    background: TH.cd,
+                    color: TH.tx,
+                    border: `1px solid ${TH.bd}`,
+                  };
+        return (
+          <button
+            onClick={onClick}
+            disabled={disabled}
+            className={`inline-flex items-center justify-center gap-2 font-semibold rounded-lg text-sm px-4 py-2.5 transition cursor-pointer select-none ${disabled ? "opacity-40" : ""} ${cl}`}
+            style={st}
+          >
+            {children}
+          </button>
+        );
+      };
+
+      const Badge = ({ children, color }) => (
+        <span
+          className="text-xs font-bold px-2 py-0.5 rounded-full"
+          style={{ background: `${color || TH.ac}1a`, color: color || TH.ac }}
+        >
+          {children}
+        </span>
+      );
+
+      const fmt2 = (v) =>
+        v == null || isNaN(v)
+          ? "0,00"
+          : Number(v).toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            });
+      const fmtW = (v) => (Number(v) || 0).toLocaleString("pt-BR");
+
+      // ============================================================
+      // CALCULADORA DE DEMANDA (embutida) - por Unidade Consumidora
+      // Recebe e atualiza o objeto de cargas de UMA unidade.
+      // ============================================================
+      function CalcDemanda({ data, onChange, redeMono }) {
+        const d = data || {};
+        const qtds = d.qtds || CAT.map(() => 0);
+        const tipoA = d.tipoA || "res";
+        const catA = d.catA || 0;
+        const mots = d.mots || [];
+        const sols = d.sols || [];
+        const [busca, setBusca] = useState("");
+
+        const upd = (patch) =>
+          onChange({ ...d, qtds, tipoA, catA, mots, sols, ...patch });
+        const setQ = (i, v) => {
+          const n = [...qtds];
+          n[i] = Math.max(0, v);
+          upd({ qtds: n });
+        };
+
+        // a) iluminacao/tomadas + nao-residencial
+        const rA = useMemo(() => {
+          const ilItems = CAT.map((c, i) => ({ ...c, q: qtds[i] || 0 })).filter(
+            (x) => x.g === "il" && x.q > 0,
+          );
+          const kwIl = ilItems.reduce((s, x) => s + x.q * x.w, 0) / 1000;
+          if (tipoA === "res") {
+            const r = calcA_res(kwIl);
+            return { kw: kwIl, ...r, label: "Residencial (Tab.10)" };
+          }
+          const r = calcA_nr(kwIl, catA);
+          return { kw: kwIl, ...r, label: TABELA_11[catA]?.d || "" };
+        }, [qtds, tipoA, catA]);
+
+        // b1..b5
+        const rB = useMemo(() => {
+          const out = {};
+          ["b1", "b2", "b3", "b4", "b5"].forEach((sg) => {
+            const items = CAT.map((c, i) => ({ ...c, q: qtds[i] || 0 })).filter(
+              (x) => x.g === sg && x.q > 0,
+            );
+            out[sg] = calcBsg(items, sg);
+          });
+          return out;
+        }, [qtds]);
+
+        // c) ar-condicionado
+        const rC = useMemo(() => {
+          const items = CAT.map((c, i) => ({ ...c, q: qtds[i] || 0 })).filter(
+            (x) => x.g === "c" && x.q > 0,
+          );
+          const kw = items.reduce((s, x) => s + x.q * x.w, 0) / 1000;
+          return { kw, d: kw };
+        }, [qtds]);
+
+        // d) motores
+        const rD = useMemo(() => {
+          const det = mots.map((m) => {
+            const tab = m.fase === "mono" ? T15 : T14;
+            const row = tab.find((r) => r.cv === parseFloat(m.cv));
+            const col = m.col || "c1";
+            const corr = row ? row[col] : null;
+            const kva = corr
+              ? corr *
+                (m.fase === "mono" ? 0.22 : 0.38) *
+                Math.sqrt(m.fase === "mono" ? 1 : 3)
+              : 0;
+            return { ...m, kva: (m.q || 0) * (kva || 0) };
+          });
+          const d = det.reduce((s, x) => s + x.kva, 0);
+          return { det, d };
+        }, [mots]);
+
+        // f) raios-x
+        const rF = useMemo(() => {
+          const items = CAT.map((c, i) => ({ ...c, q: qtds[i] || 0 })).filter(
+            (x) => x.g === "f" && x.q > 0,
+          );
+          const kw = items.reduce((s, x) => s + x.q * x.w, 0) / 1000;
+          return { kw, d: kw * 0.5 };
+        }, [qtds]);
+
+        const demandaTotal = useMemo(() => {
+          const b = Object.values(rB).reduce((s, x) => s + (x.d || 0), 0);
+          return rA.d + b + rC.d + rD.d + rF.d;
+        }, [rA, rB, rC, rD, rF]);
+
+        const cargaInstalada = useMemo(() => {
+          const cargasCat =
+            CAT.reduce((s, c, i) => s + (qtds[i] || 0) * c.w, 0) / 1000;
+          const motoresKw = 0; // motores entram via demanda
+          return cargasCat;
+        }, [qtds]);
+
+        const disjuntores = useMemo(
+          () => selecionarDisjuntores(demandaTotal, redeMono),
+          [demandaTotal, redeMono],
+        );
+
+        // expoe resultado ao pai sempre que muda
+        const lastRef = useRef("");
+        const resKey = `${demandaTotal.toFixed(3)}|${cargaInstalada.toFixed(3)}|${disjuntores.map((x) => x.fx).join(",")}`;
+        if (lastRef.current !== resKey) {
+          lastRef.current = resKey;
+          setTimeout(
+            () =>
+              onChange({
+                ...d,
+                qtds,
+                tipoA,
+                catA,
+                mots,
+                sols,
+                _demanda: demandaTotal,
+                _cargaKw: cargaInstalada,
+                _disjuntores: disjuntores.map((x) => x.fx),
+              }),
+            0,
+          );
+        }
+
+        const catFiltrado = CAT.map((c, i) => ({ ...c, i })).filter(
+          (c) => !busca || c.n.toLowerCase().includes(busca.toLowerCase()),
+        );
+
+        return (
+          <div>
+            <div className="grid md:grid-cols-3 gap-3 mb-4">
+              <div
+                className="rounded-lg p-3 text-center"
+                style={{ background: TH.soft }}
+              >
+                <div className="text-xs font-semibold" style={{ color: TH.mt }}>
+                  Carga Instalada
+                </div>
+                <div
+                  className="text-lg font-extrabold"
+                  style={{ color: TH.acD }}
+                >
+                  {fmt2(cargaInstalada)} <span className="text-xs">kW</span>
+                </div>
+              </div>
+              <div
+                className="rounded-lg p-3 text-center"
+                style={{ background: TH.soft }}
+              >
+                <div className="text-xs font-semibold" style={{ color: TH.mt }}>
+                  Demanda Calculada
+                </div>
+                <div
+                  className="text-lg font-extrabold"
+                  style={{ color: TH.ac }}
+                >
+                  {fmt2(demandaTotal)} <span className="text-xs">kVA</span>
+                </div>
+              </div>
+              <div
+                className="rounded-lg p-3 text-center"
+                style={{ background: TH.acD }}
+              >
+                <div
+                  className="text-xs font-semibold"
+                  style={{ color: TH.lime }}
+                >
+                  Disjuntor Sugerido
+                </div>
+                <div className="text-sm font-bold text-white leading-tight mt-1">
+                  {disjuntores.length
+                    ? disjuntores.map((x) => x.fx).join(" · ")
+                    : "—"}
+                </div>
+              </div>
+            </div>
+
+            <Field label="Atividade da Unidade" cl="mb-3">
+              <div className="flex gap-2 flex-wrap items-center">
+                <Toggle
+                  value={tipoA}
+                  onChange={(v) => upd({ tipoA: v })}
+                  options={[
+                    { v: "res", l: "Residencial" },
+                    { v: "nr", l: "Não-Residencial" },
+                  ]}
+                />
+                {tipoA === "nr" && (
+                  <select
+                    value={catA}
+                    onChange={(e) => upd({ catA: +e.target.value })}
+                    className="rounded-lg text-sm outline-none"
+                    style={{
+                      background: TH.inp,
+                      color: TH.tx,
+                      border: `1px solid ${TH.bd}`,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    {TABELA_11.map((c, i) => (
+                      <option key={i} value={i}>
+                        {c.d}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </Field>
+
+            <Field label="Buscar equipamento" cl="mb-2">
+              <Inp
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Ex: chuveiro, geladeira, ar..."
+              />
+            </Field>
+
+            <div
+              className="rounded-lg overflow-hidden mb-3"
+              style={{
+                border: `1px solid ${TH.bd}`,
+                maxHeight: 360,
+                overflowY: "auto",
+              }}
+            >
+              {GO.map((sg) => {
+                const items = catFiltrado.filter((c) => c.g === sg);
+                if (!items.length) return null;
+                return (
+                  <div key={sg}>
+                    <div
+                      className="px-3 py-1.5 text-xs font-bold sticky top-0"
+                      style={{ background: TH.soft, color: TH.acD }}
+                    >
+                      {GL[sg]}
+                    </div>
+                    {items.map((c) => (
+                      <div
+                        key={c.i}
+                        className="flex items-center justify-between px-3 py-2"
+                        style={{ borderTop: `1px solid ${TH.bd}` }}
+                      >
+                        <div className="text-sm" style={{ color: TH.tx }}>
+                          {c.n}{" "}
+                          <span className="text-xs" style={{ color: TH.mt }}>
+                            ({fmtW(c.w)} W)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setQ(c.i, (qtds[c.i] || 0) - 1)}
+                            className="w-7 h-7 rounded-md font-bold cursor-pointer"
+                            style={{
+                              background: TH.inp,
+                              border: `1px solid ${TH.bd}`,
+                              color: TH.tx,
+                            }}
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            value={qtds[c.i] || 0}
+                            onChange={(e) =>
+                              setQ(c.i, parseInt(e.target.value) || 0)
+                            }
+                            className="w-12 text-center rounded-md text-sm outline-none"
+                            style={{
+                              background: TH.inp,
+                              border: `1px solid ${TH.bd}`,
+                              color: TH.tx,
+                              padding: "5px 2px",
+                            }}
+                          />
+                          <button
+                            onClick={() => setQ(c.i, (qtds[c.i] || 0) + 1)}
+                            className="w-7 h-7 rounded-md font-bold cursor-pointer"
+                            style={{ background: TH.ac, color: "#fff" }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Motores */}
+            <div
+              className="rounded-lg p-3 mb-2"
+              style={{ background: TH.inp, border: `1px solid ${TH.bd}` }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold" style={{ color: TH.acD }}>
+                  Motores / Cargas Especiais
+                </span>
+                <button
+                  onClick={() =>
+                    upd({
+                      mots: [
+                        ...mots,
+                        { fase: "tri", cv: "1", col: "c1", q: 1 },
+                      ],
+                    })
+                  }
+                  className="text-xs font-semibold rounded-md px-2 py-1 cursor-pointer"
+                  style={{ background: TH.ac, color: "#fff" }}
+                >
+                  + Motor
+                </button>
+              </div>
+              {mots.length === 0 && (
+                <div className="text-xs" style={{ color: TH.mt }}>
+                  Nenhum motor adicionado.
+                </div>
+              )}
+              {mots.map((m, mi) => (
+                <div
+                  key={mi}
+                  className="flex gap-1.5 items-center mb-1.5 flex-wrap"
+                >
+                  <select
+                    value={m.fase}
+                    onChange={(e) => {
+                      const n = [...mots];
+                      n[mi] = { ...m, fase: e.target.value };
+                      upd({ mots: n });
+                    }}
+                    className="rounded-md text-xs"
+                    style={{
+                      background: TH.cd,
+                      border: `1px solid ${TH.bd}`,
+                      padding: "5px",
+                    }}
+                  >
+                    <option value="mono">Mono (T15)</option>
+                    <option value="tri">Tri (T14)</option>
+                  </select>
+                  <select
+                    value={m.cv}
+                    onChange={(e) => {
+                      const n = [...mots];
+                      n[mi] = { ...m, cv: e.target.value };
+                      upd({ mots: n });
+                    }}
+                    className="rounded-md text-xs"
+                    style={{
+                      background: TH.cd,
+                      border: `1px solid ${TH.bd}`,
+                      padding: "5px",
+                    }}
+                  >
+                    {(m.fase === "mono" ? T15 : T14).map((r) => (
+                      <option key={r.cv} value={r.cv}>
+                        {r.l} CV
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={m.col}
+                    onChange={(e) => {
+                      const n = [...mots];
+                      n[mi] = { ...m, col: e.target.value };
+                      upd({ mots: n });
+                    }}
+                    className="rounded-md text-xs"
+                    style={{
+                      background: TH.cd,
+                      border: `1px solid ${TH.bd}`,
+                      padding: "5px",
+                    }}
+                  >
+                    <option value="c1">Cat.I</option>
+                    <option value="c2">Cat.II</option>
+                    <option value="c3">Cat.III</option>
+                    <option value="c4">Cat.IV</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={m.q}
+                    onChange={(e) => {
+                      const n = [...mots];
+                      n[mi] = { ...m, q: parseInt(e.target.value) || 0 };
+                      upd({ mots: n });
+                    }}
+                    className="w-14 rounded-md text-xs text-center"
+                    style={{
+                      background: TH.cd,
+                      border: `1px solid ${TH.bd}`,
+                      padding: "5px",
+                    }}
+                    placeholder="Qtd"
+                  />
+                  <button
+                    onClick={() => {
+                      const n = mots.filter((_, x) => x !== mi);
+                      upd({ mots: n });
+                    }}
+                    className="text-xs cursor-pointer"
+                    style={{ color: TH.rd }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {rD.d > 0 && (
+                <div
+                  className="text-xs mt-1 font-semibold"
+                  style={{ color: TH.ac }}
+                >
+                  Demanda motores: {fmt2(rD.d)} kVA
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // ============================================================
+      // CLASSIFICADOR DE ATENDIMENTO
+      // Decide entre: ate3 (sem disjuntor geral) | mais3 (proj BT / proteção geral)
+      // ============================================================
+      function classificar(c) {
+        // c: { nCaixas, protecaoGeral, edificacaoAcima75, biAcima60, triAcima60, multiTri, projeto }
+        const motivos = [];
+        let fluxo = "ate3";
+        if (c.projeto) {
+          fluxo = "mais3";
+          motivos.push("Aprovação de Projeto Elétrico de BT");
+        }
+        if (c.edificacaoAcima75) {
+          fluxo = "mais3";
+          motivos.push("Edificação individual acima de 75 kW em BT");
+        }
+        if (Number(c.nCaixas) > 3) {
+          fluxo = "mais3";
+          motivos.push("Agrupamento acima de 3 caixas de medição");
+        }
+        if (c.protecaoGeral) {
+          fluxo = "mais3";
+          motivos.push("Opção por instalação de proteção geral");
+        }
+        if (c.biAcima60) {
+          fluxo = "mais3";
+          motivos.push("UC bifásica acima de 60A (NEMA) / 63A (IEC)");
+        }
+        if (c.triAcima60) {
+          fluxo = "mais3";
+          motivos.push("UC trifásica acima de 60A (NEMA) / 63A (IEC)");
+        }
+        if (c.multiTri) {
+          fluxo = "mais3";
+          motivos.push("Mais de uma UC trifásica");
+        }
+        if (fluxo === "ate3")
+          motivos.push("Agrupamento até 3 caixas sem disjuntor geral");
+        return { fluxo, motivos };
+      }
+
+      function Classificador({ onConfirm }) {
+        const [c, setC] = useState({
+          nCaixas: 1,
+          protecaoGeral: false,
+          edificacaoAcima75: false,
+          biAcima60: false,
+          triAcima60: false,
+          multiTri: false,
+          projeto: false,
+        });
+        const set = (k, v) => setC((p) => ({ ...p, [k]: v }));
+        const res = classificar(c);
+        const Q = ({ k, label }) => (
+          <div
+            className="flex items-center justify-between py-2.5"
+            style={{ borderTop: `1px solid ${TH.bd}` }}
+          >
+            <span className="text-sm pr-3" style={{ color: TH.tx }}>
+              {label}
+            </span>
+            <Toggle
+              value={c[k]}
+              onChange={(v) => set(k, v)}
+              options={[
+                { v: true, l: "Sim" },
+                { v: false, l: "Não" },
+              ]}
+            />
+          </div>
+        );
+        return (
+          <div className="fade-in">
+            <Card
+              title="Classificador de Atendimento"
+              sub="Responda às perguntas abaixo. O sistema indicará o formulário correto conforme o Art. 9º da REN ANEEL 1.000/2021 e as normas ND-5.1 / ND-5.2."
+            >
+              <Field label="Quantidade de caixas de medição" cl="mb-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => set("nCaixas", Math.max(1, c.nCaixas - 1))}
+                    className="w-9 h-9 rounded-lg font-bold cursor-pointer"
+                    style={{ background: TH.inp, border: `1px solid ${TH.bd}` }}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    value={c.nCaixas}
+                    onChange={(e) =>
+                      set("nCaixas", Math.max(1, parseInt(e.target.value) || 1))
+                    }
+                    className="w-16 text-center rounded-lg text-sm font-bold"
+                    style={{
+                      background: TH.inp,
+                      border: `1px solid ${TH.bd}`,
+                      padding: "8px",
+                    }}
+                  />
+                  <button
+                    onClick={() => set("nCaixas", c.nCaixas + 1)}
+                    className="w-9 h-9 rounded-lg font-bold cursor-pointer"
+                    style={{ background: TH.ac, color: "#fff" }}
+                  >
+                    +
+                  </button>
+                </div>
+              </Field>
+              <Q
+                k="projeto"
+                label="É uma Aprovação de Projeto Elétrico de Baixa Tensão?"
+              />
+              <Q
+                k="edificacaoAcima75"
+                label="Edificação individual acima de 75 kW com atendimento em BT?"
+              />
+              <Q
+                k="protecaoGeral"
+                label="O cliente optará por instalar proteção geral (disjuntor geral)?"
+              />
+              <Q
+                k="biAcima60"
+                label="Há UC bifásica acima de 60A (NEMA) ou 63A (IEC)?"
+              />
+              <Q
+                k="triAcima60"
+                label="Há UC trifásica acima de 60A (NEMA) ou 63A (IEC)?"
+              />
+              <Q
+                k="multiTri"
+                label="Há mais de uma UC trifásica (independente do disjuntor)?"
+              />
+            </Card>
+
+            <Card cl="!mb-3">
+              <div className="flex items-start gap-3">
+                <div
+                  className="rounded-lg px-3 py-2 text-center min-w-max"
+                  style={{ background: res.fluxo === "mais3" ? TH.acD : TH.ac }}
+                >
+                  <div
+                    className="text-xs font-semibold"
+                    style={{ color: TH.lime }}
+                  >
+                    Formulário indicado
+                  </div>
+                  <div className="text-sm font-extrabold text-white">
+                    {res.fluxo === "mais3"
+                      ? "Análise de Rede / Projeto BT (APR Web)"
+                      : "Orçamento até 3 caixas (sem disjuntor geral)"}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3">
+                <div
+                  className="text-xs font-bold mb-1"
+                  style={{ color: TH.mt }}
+                >
+                  Motivos da classificação:
+                </div>
+                <ul className="text-xs space-y-1" style={{ color: TH.tx }}>
+                  {res.motivos.map((m, i) => (
+                    <li key={i}>• {m}</li>
+                  ))}
+                </ul>
+              </div>
+            </Card>
+
+            <div className="flex gap-2 justify-end">
+              <Btn v="a" onClick={() => onConfirm(res.fluxo, c, res)}>
+                Continuar com este formulário →
+              </Btn>
+            </div>
+          </div>
+        );
+      }
+
+      // ============================================================
+      // APP PRINCIPAL
+      // ============================================================
+      const estadoInicialUC = () => ({
+        nPredial: "",
+        complemento: "",
+        caixa: "",
+        solicitacao: "Conexão Nova",
+        mudancaLocal: "Não",
+        desligamento: "Não",
+        atividade: "Residencial",
+        ramo: "",
+        instalacao: "",
+        disjDe: "",
+        disjPara: "",
+        disjEscolhido: "",
+        cargas: {
+          qtds: CAT.map(() => 0),
+          tipoA: "res",
+          catA: 0,
+          mots: [],
+          sols: [],
+        },
+      });
+
+      function App() {
+        const [etapa, setEtapa] = useState("classificador"); // classificador | form
+        const [fluxo, setFluxo] = useState("ate3");
+        const [classData, setClassData] = useState(null);
+        const [classRes, setClassRes] = useState(null);
+        const [aba, setAba] = useState("prop");
+
+        // ===== DADOS COMPARTILHADOS =====
+        const [prop, setProp] = useState({
+          nome: "",
+          filiacao: "",
+          email: "",
+          rg: "",
+          nasc: "",
+          celular: "",
+          fixo: "",
+          cpfCnpj: "",
+          laudoMedico: "Não",
+          telSolic: "",
+          emailSolic: "",
+          telProp: "",
+          emailProp: "",
+          nis: "Não",
+          numNis: "",
+        });
+        const [corr, setCorr] = useState({
+          vencimento: "",
+          receberEmail: "Sim",
+          rua: "",
+          bairro: "",
+          num: "",
+          compl: "",
+          municipio: "",
+          cep: "",
+          estado: "MG",
+          contaGlobal: "",
+        });
+        const [obra, setObra] = useState({
+          art: "",
+          prontoLigar: "Não",
+          app: "Não",
+          reservaLegal: "Não",
+          mudancaColetivo: "Não",
+          endereco: "",
+          num: "",
+          compl: "",
+          bairro: "",
+          cidade: "",
+          estado: "MG",
+          cep: "",
+          localizacao: "Urbana",
+          instalacaoUC: "",
+          coordenada: "",
+          latitude: "",
+          longitude: "",
+          fuso: "",
+          utm: "",
+          instProxima: "",
+          modalidade: "",
+          distMenor30: "Sim",
+          tipoRede: "Trifásica",
+          transformador: "",
+          pontoRef: "",
+          nomePropriedade: "",
+          distritoComunidade: "",
+        });
+        // Classificação do atendimento (quadro 4)
+        const [classif, setClassif] = useState({
+          solicitacao: "Conexão Nova",
+          escopo: "",
+          demandaFutura: "",
+          demandaAtual: "",
+          nTotalUcs: "",
+          disjSolicitado: "",
+          disjAtual: "",
+          nUcs: "",
+          motorMono: false,
+          motorTri: false,
+          disjGeralCond: "",
+          disjAntes: "Não",
+          demandaCond: "",
+        });
+        // Gerador de emergência
+        const [gerador, setGerador] = useState({
+          possui: "Não",
+          potencia: "",
+          fonte: "",
+          descricao: "",
+        });
+        const [obs, setObs] = useState("");
+        const [cepStatus, setCepStatus] = useState({ obra: "", corr: "" });
+
+        // ===== UNIDADES CONSUMIDORAS =====
+        const [ucs, setUcs] = useState([estadoInicialUC()]);
+        const setUC = (i, patch) =>
+          setUcs((p) =>
+            p.map((u, idx) => (idx === i ? { ...u, ...patch } : u)),
+          );
+        const addUC = () => setUcs((p) => [...p, estadoInicialUC()]);
+        const delUC = (i) => setUcs((p) => p.filter((_, idx) => idx !== i));
+
+        const redeMono =
+          obra.tipoRede === "Monofásica" || obra.tipoRede === "Bifásica";
+
+        // ===== API PÚBLICA DE CEP (ViaCEP) =====
+        const buscarCEP = async (cep, alvo) => {
+          const limpo = (cep || "").replace(/\D/g, "");
+          if (limpo.length !== 8) {
+            setCepStatus((p) => ({ ...p, [alvo]: "" }));
+            return;
+          }
+          setCepStatus((p) => ({ ...p, [alvo]: "buscando" }));
+          try {
+            const r = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+            const d = await r.json();
+            if (d.erro) {
+              setCepStatus((p) => ({ ...p, [alvo]: "erro" }));
+              return;
+            }
+            if (alvo === "obra") {
+              setObra((o) => ({
+                ...o,
+                endereco: d.logradouro || o.endereco,
+                bairro: d.bairro || o.bairro,
+                cidade: d.localidade || o.cidade,
+                estado: d.uf || o.estado,
+              }));
+            } else {
+              setCorr((c) => ({
+                ...c,
+                rua: d.logradouro || c.rua,
+                bairro: d.bairro || c.bairro,
+                municipio: d.localidade || c.municipio,
+                estado: d.uf || c.estado,
+              }));
+            }
+            setCepStatus((p) => ({ ...p, [alvo]: "ok" }));
+          } catch (e) {
+            setCepStatus((p) => ({ ...p, [alvo]: "erro" }));
+          }
+        };
+
+        // ===== REGRA DE DISJUNTORES (formulário até 3 caixas) =====
+        // Com mais de uma UC: no máx. 1 tripolar 63A E/OU até 2 mono/bifásicos 63A (ou combinação).
+        const validacaoDisjuntores = useMemo(() => {
+          if (fluxo !== "ate3" || ucs.length <= 1) return { ok: true, msg: "" };
+          let tri = 0,
+            monoBi = 0;
+          ucs.forEach((u) => {
+            const list = u.cargas?._disjuntores || [];
+            // considera o disjuntor de maior porte sugerido para a UC
+            const escolhido = u.disjEscolhido || list[0] || "";
+            if (/Tripolar/i.test(escolhido)) tri++;
+            else if (/Mono|Bipolar/i.test(escolhido)) monoBi++;
+          });
+          const excedeTri = tri > 1;
+          const excedeMonoBi = monoBi > 2;
+          // qualquer disjuntor acima de 63A inviabiliza o fluxo até 3 caixas
+          const acima63 = ucs.some((u) => {
+            const esc =
+              u.disjEscolhido || (u.cargas?._disjuntores || [])[0] || "";
+            const m = esc.match(/(\d+)\s*A/);
+            return m && Number(m[1]) > 63;
+          });
+          if (acima63)
+            return {
+              ok: false,
+              msg: "Há UC com disjuntor acima de 63 A. Nesse caso o atendimento exige proteção geral / projeto (mais de 3 caixas). Reclassifique o atendimento.",
+            };
+          if (excedeTri)
+            return {
+              ok: false,
+              msg: `Com mais de uma UC é permitido no máximo 1 disjuntor tripolar de 63 A (atual: ${tri}).`,
+            };
+          if (excedeMonoBi)
+            return {
+              ok: false,
+              msg: `Com mais de uma UC são permitidos no máximo 2 disjuntores mono/bifásicos de 63 A (atual: ${monoBi}).`,
+            };
+          return {
+            ok: true,
+            msg: `Combinação válida: ${tri} tripolar(es) 63A + ${monoBi} mono/bifásico(s) 63A.`,
+          };
+        }, [fluxo, ucs]);
+
+        // Coordenada obrigatória para rural a mais de 30 m da rede
+        const coordObrigatoria =
+          obra.localizacao === "Rural" && obra.distMenor30 === "Não";
+        const coordPreenchida = !!(
+          obra.coordenada ||
+          (obra.latitude && obra.longitude)
+        );
+
+        const onConfirmClass = (fx, cd, res) => {
+          setFluxo(fx);
+          setClassData(cd);
+          setClassRes(res);
+          setClassif((p) => ({ ...p, nTotalUcs: cd.nCaixas }));
+          // ajusta nº de UCs conforme caixas (limita a um número gerenciável)
+          const n = Math.max(
+            1,
+            Math.min(Number(cd.nCaixas) || 1, fx === "ate3" ? 3 : 30),
+          );
+          setUcs(Array.from({ length: n }, () => estadoInicialUC()));
+          setEtapa("form");
+          setAba("prop");
+        };
+
+        // demanda total somada
+        const demandaTotalGeral = useMemo(
+          () => ucs.reduce((s, u) => s + (u.cargas?._demanda || 0), 0),
+          [ucs],
+        );
+
+        // abas conforme fluxo
+        // Comuns a ambos: proprietário, correspondência, obra
+        const abasComuns = [
+          { k: "prop", l: "Proprietário" },
+          { k: "corr", l: "Correspondência" },
+          { k: "obra", l: "Dados da Obra" },
+        ];
+        // A classificação do atendimento vem APÓS a declaração de cargas (aba "ucs")
+        // e é exclusiva do formulário coletivo (mais de 3 caixas).
+        const abasFluxo =
+          fluxo === "mais3"
+            ? [
+                { k: "ucs", l: "Unidades Consumidoras" },
+                { k: "class", l: "Classificação" },
+                { k: "disj", l: "Disjuntores Prumada" },
+              ]
+            : [
+                { k: "ucs", l: "Cargas e UCs" },
+                { k: "gerador", l: "Gerador de Emergência" },
+              ];
+        const abas = [
+          ...abasComuns,
+          ...abasFluxo,
+          { k: "obs", l: "Observações" },
+          { k: "revisar", l: "Revisar e PDF" },
+        ];
+
+        // ============================================================
+        // GERAR PDF
+        // ============================================================
+        const gerarPDF = useCallback(() => {
+          if (!window.jspdf) {
+            alert("Biblioteca jsPDF não carregada. Verifique sua conexão.");
+            return;
+          }
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ unit: "mm", format: "a4" });
+          const PW = 210,
+            PH = 297,
+            MG = 14,
+            CW = PW - 2 * MG;
+          let cy = MG;
+
+          const checkSpace = (h) => {
+            if (cy + h > PH - 14) {
+              addFooterNum();
+              doc.addPage();
+              cy = MG;
+              drawTopBar();
+            }
+          };
+
+          let pageNum = 0;
+          const drawTopBar = () => {
+            doc.setFillColor(4, 30, 24);
+            doc.rect(0, 0, PW, 18, "F");
+            doc.setFillColor(1, 111, 34);
+            doc.rect(0, 0, 4, 18, "F");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11);
+            doc.setTextColor(255, 255, 255);
+            doc.text("Formulário CEMIG - Orçamento de Conexão BT", MG, 8);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7);
+            doc.setTextColor(150, 200, 170);
+            doc.text(
+              fluxo === "mais3"
+                ? "Análise de Rede / Projeto BT (mais de 3 caixas / proteção geral)"
+                : "Conexão até 3 caixas (sem disjuntor geral)",
+              MG,
+              13.5,
+            );
+            cy = 24;
+          };
+          const addFooterNum = () => {
+            pageNum++;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(6.5);
+            doc.setTextColor(150, 150, 150);
+            doc.text(
+              "Documento gerado eletronicamente - não substitui o formulário oficial CEMIG",
+              MG,
+              PH - 7,
+            );
+          };
+
+          const sec = (txt) => {
+            checkSpace(11);
+            doc.setFillColor(231, 241, 239);
+            doc.rect(MG, cy, CW, 7, "F");
+            doc.setFillColor(1, 111, 34);
+            doc.rect(MG, cy, 2.5, 7, "F");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(4, 30, 24);
+            doc.text(txt, MG + 5, cy + 4.8);
+            cy += 9;
+          };
+          // pares label:valor em duas colunas
+          const kvPairs = (pairs) => {
+            const colW = CW / 2;
+            for (let i = 0; i < pairs.length; i += 2) {
+              checkSpace(8);
+              [pairs[i], pairs[i + 1]].forEach((p, ci) => {
+                if (!p) return;
+                const x = MG + ci * colW;
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(7);
+                doc.setTextColor(110, 116, 130);
+                doc.text(p[0] + ":", x + 1, cy + 3);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(30, 32, 42);
+                const val = doc.splitTextToSize(String(p[1] || "—"), colW - 4);
+                doc.text(val[0], x + 1, cy + 6.8);
+              });
+              cy += 8.5;
+            }
+          };
+          const fullLine = (label, val) => {
+            const lines = doc.splitTextToSize(String(val || "—"), CW - 4);
+            checkSpace(5 + lines.length * 4);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7);
+            doc.setTextColor(110, 116, 130);
+            doc.text(label + ":", MG + 1, cy + 3);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(30, 32, 42);
+            doc.text(lines, MG + 1, cy + 7);
+            cy += 5 + lines.length * 4;
+          };
+          const totRow = (label, val) => {
+            checkSpace(8);
+            doc.setFillColor(1, 111, 34);
+            doc.rect(MG, cy, CW, 7.5, "F");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9.5);
+            doc.setTextColor(196, 255, 63);
+            doc.text(label, MG + 5, cy + 5.2);
+            doc.text(val, MG + CW - 2, cy + 5.2, { align: "right" });
+            cy += 9;
+          };
+
+          drawTopBar();
+
+          // 0. Classificação automática
+          sec("CLASSIFICAÇÃO DO ATENDIMENTO");
+          fullLine(
+            "Formulário",
+            fluxo === "mais3"
+              ? "Análise de Rede / Aprovação de Projeto BT (APR Web)"
+              : "Orçamento de Conexão até 3 caixas (sem disjuntor geral)",
+          );
+          if (classRes) fullLine("Critérios", classRes.motivos.join("; "));
+          kvPairs([
+            ["Qtd. de caixas de medição", classData?.nCaixas],
+            ["Solicitação", classif.solicitacao],
+          ]);
+          cy += 2;
+
+          // 1. Proprietário
+          sec("1.  DADOS DO PROPRIETÁRIO");
+          kvPairs([
+            ["Nome Completo", prop.nome],
+            ["CPF/CNPJ", prop.cpfCnpj],
+            ["E-mail", prop.email],
+            ["Celular", prop.celular],
+            ["Telefone Fixo", prop.fixo],
+            ["RG/RNE/RANI", prop.rg],
+            ["Data Nasc.", prop.nasc],
+            ["Filiação", prop.filiacao],
+            ["Tel. Solicitante", prop.telSolic],
+            ["Tel. Proprietário", prop.telProp],
+            ["Laudo médico (equip. essenciais)", prop.laudoMedico],
+            ["NIS Tarifa Social", prop.nis === "Sim" ? prop.numNis : "Não"],
+          ]);
+          cy += 2;
+
+          // 2. Correspondência
+          sec("2.  CORRESPONDÊNCIA E FATURA");
+          kvPairs([
+            ["Receber fatura por e-mail", corr.receberEmail],
+            ["Vencimento desejado", corr.vencimento],
+            ["Conta globalizada", corr.contaGlobal],
+            ["", ""],
+          ]);
+          if (corr.receberEmail === "Não") {
+            kvPairs([
+              ["Rua/Av", corr.rua],
+              ["Nº", corr.num],
+              ["Bairro/Distrito", corr.bairro],
+              ["Complemento", corr.compl],
+              ["Município", corr.municipio],
+              ["CEP", corr.cep],
+              ["Estado", corr.estado],
+              ["", ""],
+            ]);
+          }
+          cy += 2;
+
+          // 3. Obra
+          sec("3.  DADOS DA OBRA (PADRÃO DE ENTRADA)");
+          const obraPairs = [
+            ["Endereço", obra.endereco],
+            ["Nº", obra.num],
+            ["Complemento", obra.compl],
+            ["Bairro", obra.bairro],
+            ["Cidade", obra.cidade],
+            ["Estado", obra.estado],
+            ["CEP", obra.cep],
+            ["Localização", obra.localizacao],
+            ["Instalação / UC", obra.instalacaoUC],
+          ];
+          if (fluxo === "mais3")
+            obraPairs.push(["Nº ART/TRT de Projeto", obra.art]);
+          obraPairs.push(
+            [
+              "Coordenadas",
+              obra.coordenada || `${obra.latitude} ${obra.longitude}`.trim(),
+            ],
+            ["Padrão pronto p/ ligar?", obra.prontoLigar],
+            ["Em APP?", obra.app],
+            ["Reserva Legal?", obra.reservaLegal],
+            ["Tipo de rede BT", obra.tipoRede],
+            ["Distância < 30m da rede?", obra.distMenor30],
+            ["Transformador próximo", obra.transformador],
+          );
+          kvPairs(obraPairs);
+          if (obra.localizacao === "Rural") {
+            kvPairs([
+              ["Distrito/Comunidade", obra.distritoComunidade],
+              ["Nome da propriedade", obra.nomePropriedade],
+              ["Ponto de referência", obra.pontoRef],
+              ["Inst. mais próxima", obra.instProxima],
+            ]);
+          }
+          cy += 2;
+
+          // 4. Classificação detalhada (quadro 4) — EXCLUSIVO do formulário coletivo (mais de 3 caixas)
+          if (fluxo === "mais3") {
+            sec("4.  CLASSIFICAÇÃO / DEMANDA DO ATENDIMENTO");
+            kvPairs([
+              ["Solicitação", classif.solicitacao],
+              ["Escopo", classif.escopo],
+              ["Nº total de UCs", classif.nTotalUcs],
+              ["Nº de UCs", classif.nUcs],
+              ["Disjuntor solicitado", classif.disjSolicitado],
+              ["Disjuntor atual", classif.disjAtual],
+              [
+                "Demanda futura (kVA)",
+                classif.demandaFutura || fmt2(demandaTotalGeral),
+              ],
+              ["Demanda atual (kVA)", classif.demandaAtual],
+              ["Motor MONO > 15 CV", classif.motorMono ? "Sim" : "Não"],
+              ["Motor TRI > 50 CV", classif.motorTri ? "Sim" : "Não"],
+              ["Disjuntor geral condomínio", classif.disjGeralCond],
+              ["Demanda condomínio (kVA)", classif.demandaCond],
+            ]);
+            cy += 2;
+          }
+
+          // 5. Unidades Consumidoras + cargas
+          ucs.forEach((u, ui) => {
+            sec(`5.${ui + 1}  UNIDADE CONSUMIDORA ${ui + 1}`);
+            kvPairs([
+              ["Solicitação", u.solicitacao],
+              ["Atividade principal", u.atividade],
+              ["Nº Predial", u.nPredial],
+              ["Complemento", u.complemento],
+              ["Caixa / Identificação", u.caixa],
+              ["Ramo de atividade", u.ramo],
+              ["Nº Instalação", u.instalacao],
+              ["Mudança de local", u.mudancaLocal],
+              ["Disjuntor De", u.disjDe],
+              ["Disjuntor Para", u.disjPara],
+            ]);
+            // tabela de cargas desta UC
+            const qtds = u.cargas?.qtds || [];
+            const itensComCarga = CAT.map((c, i) => ({
+              ...c,
+              q: qtds[i] || 0,
+            })).filter((x) => x.q > 0);
+            if (itensComCarga.length) {
+              checkSpace(6);
+              doc.setFillColor(215, 218, 226);
+              doc.rect(MG, cy, CW, 5.5, "F");
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(7);
+              doc.setTextColor(90, 96, 115);
+              doc.text("Equipamento", MG + 2, cy + 3.8);
+              doc.text("Pot. (W)", MG + 95, cy + 3.8);
+              doc.text("Qtd", MG + 125, cy + 3.8, { align: "center" });
+              doc.text("Total (W)", MG + CW - 2, cy + 3.8, { align: "right" });
+              cy += 5.5;
+              let ri = 0;
+              itensComCarga.forEach((it) => {
+                checkSpace(5);
+                doc.setFillColor(
+                  ri % 2 ? 247 : 255,
+                  ri % 2 ? 248 : 255,
+                  ri % 2 ? 251 : 255,
+                );
+                doc.rect(MG, cy, CW, 5, "F");
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.setTextColor(30, 32, 42);
+                doc.text(it.n, MG + 2, cy + 3.5);
+                doc.text(fmtW(it.w), MG + 95, cy + 3.5);
+                doc.text(String(it.q), MG + 125, cy + 3.5, { align: "center" });
+                doc.text(fmtW(it.q * it.w), MG + CW - 2, cy + 3.5, {
+                  align: "right",
+                });
+                ri++;
+                cy += 5;
+              });
+            }
+            // motores
+            const mots = u.cargas?.mots || [];
+            mots
+              .filter((m) => (m.q || 0) > 0)
+              .forEach((m, mi) => {
+                checkSpace(5);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.setTextColor(60, 60, 70);
+                doc.text(
+                  `Motor ${m.fase === "mono" ? "Monofásico" : "Trifásico"} ${m.cv} CV (Cat. ${m.col?.replace("c", "")}) — Qtd: ${m.q}`,
+                  MG + 2,
+                  cy + 3.5,
+                );
+                cy += 5;
+              });
+            checkSpace(8);
+            totRow(
+              `Carga ${fmt2(u.cargas?._cargaKw || 0)} kW  |  Demanda`,
+              `${fmt2(u.cargas?._demanda || 0)} kVA`,
+            );
+            if (u.cargas?._disjuntores?.length)
+              fullLine(
+                "Disjuntor sugerido (ND-5.1)",
+                u.cargas._disjuntores.join("  ·  "),
+              );
+            if (u.disjEscolhido)
+              fullLine("Disjuntor escolhido", u.disjEscolhido);
+            cy += 2;
+          });
+
+          // 6. Disjuntores de prumada (fluxo mais3)
+          if (fluxo === "mais3") {
+            sec("6.  DISJUNTORES DE PAVIMENTO/BLOCO E PRUMADA");
+            kvPairs([
+              ["Disjuntor geral solicitado", classif.disjSolicitado],
+              ["Disjuntor geral atual", classif.disjAtual],
+              ["Disjuntor cond./incêndio", classif.disjGeralCond],
+              ["Disj. antes do geral?", classif.disjAntes],
+            ]);
+            cy += 2;
+          }
+
+          // 7. Gerador de emergência (fluxo ate3)
+          if (fluxo === "ate3") {
+            sec("7.  GERADOR DE EMERGÊNCIA");
+            const gpairs = [["Há gerador de emergência?", gerador.possui]];
+            if (gerador.possui === "Sim") {
+              gpairs.push(
+                ["Potência (kVA)", gerador.potencia],
+                ["Fonte/Combustível", gerador.fonte],
+              );
+            }
+            kvPairs(gpairs);
+            if (gerador.possui === "Sim" && gerador.descricao)
+              fullLine("Descrição", gerador.descricao);
+            cy += 2;
+          }
+
+          // Observações
+          sec("OBSERVAÇÕES");
+          fullLine("Obs.", obs || "—");
+          cy += 4;
+
+          // Demanda total geral
+          totRow(
+            "DEMANDA TOTAL DO ATENDIMENTO",
+            `${fmt2(demandaTotalGeral)} kVA`,
+          );
+          cy += 4;
+
+          // assinatura
+          checkSpace(20);
+          doc.setDrawColor(180, 180, 180);
+          doc.line(MG + 30, cy + 8, MG + CW - 30, cy + 8);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(90, 90, 90);
+          doc.text(
+            "Local e data / Assinatura do proprietário ou representante legal",
+            PW / 2,
+            cy + 12,
+            { align: "center" },
+          );
+
+          addFooterNum();
+          const nomeArq = (prop.nome || "formulario")
+            .replace(/[^a-zA-Z0-9]/g, "_")
+            .slice(0, 30);
+          doc.save(`CEMIG_${fluxo}_${nomeArq}.pdf`);
+        }, [
+          fluxo,
+          classData,
+          classRes,
+          prop,
+          corr,
+          obra,
+          classif,
+          ucs,
+          gerador,
+          obs,
+          demandaTotalGeral,
+        ]);
+
+        // ============================================================
+        // RENDER
+        // ============================================================
+        if (etapa === "classificador") {
+          return (
+            <div style={{ background: TH.bg, minHeight: "100vh" }}>
+              <div style={{ background: TH.acD }} className="px-5 py-4">
+                <h1 className="text-white font-extrabold text-lg">
+                  Formulários CEMIG — Orçamento de Conexão BT
+                </h1>
+                <p style={{ color: "#9fc7ae" }} className="text-xs mt-0.5">
+                  Preenchimento web unificado · ND-5.1 / ND-5.2 · REN ANEEL
+                  1.000/2021
+                </p>
+              </div>
+              <div className="max-w-3xl mx-auto p-4 md:p-6">
+                <Classificador onConfirm={onConfirmClass} />
+              </div>
+            </div>
+          );
+        }
+
+        const idx = abas.findIndex((a) => a.k === aba);
+        const irProx = () => setAba(abas[Math.min(idx + 1, abas.length - 1)].k);
+        const irAnt = () => setAba(abas[Math.max(idx - 1, 0)].k);
+
+        return (
+          <div style={{ background: TH.bg, minHeight: "100vh" }}>
+            <div
+              style={{ background: TH.acD }}
+              className="px-5 py-4 sticky top-0 z-20"
+            >
+              <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h1 className="text-white font-extrabold text-base md:text-lg">
+                    Formulários CEMIG — Orçamento de Conexão BT
+                  </h1>
+                  <p style={{ color: "#9fc7ae" }} className="text-xs mt-0.5">
+                    {fluxo === "mais3"
+                      ? "Análise de Rede / Projeto BT (APR Web)"
+                      : "Conexão até 3 caixas (sem disjuntor geral)"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge color="#c4ff3f">{fmt2(demandaTotalGeral)} kVA</Badge>
+                  <button
+                    onClick={() => setEtapa("classificador")}
+                    className="text-xs font-semibold rounded-lg px-3 py-2 cursor-pointer"
+                    style={{
+                      background: "rgba(255,255,255,.1)",
+                      color: "#fff",
+                    }}
+                  >
+                    ↻ Reclassificar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* abas */}
+            <div
+              style={{ background: TH.cd, borderBottom: `1px solid ${TH.bd}` }}
+              className="px-3 sticky z-10"
+            >
+              <div className="max-w-5xl mx-auto flex gap-1 overflow-x-auto py-2">
+                {abas.map((a, i) => {
+                  const on = a.k === aba;
+                  return (
+                    <button
+                      key={a.k}
+                      onClick={() => setAba(a.k)}
+                      className="text-xs font-semibold rounded-lg px-3 py-2 whitespace-nowrap cursor-pointer transition"
+                      style={
+                        on
+                          ? { background: TH.ac, color: "#fff" }
+                          : { background: TH.inp, color: TH.mt }
+                      }
+                    >
+                      {i + 1}. {a.l}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="max-w-5xl mx-auto p-4 md:p-6 fade-in" key={aba}>
+              {/* ABA PROPRIETÁRIO */}
+              {aba === "prop" && (
+                <Card
+                  title="1. Dados do Proprietário"
+                  sub="Titular da conta de energia ou proprietário/possuidor do imóvel. * obrigatório · ** obrigatório para pessoa física."
+                >
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <Field
+                      label="Nome Completo (sem abreviações)"
+                      req
+                      cl="md:col-span-2"
+                    >
+                      <Inp
+                        value={prop.nome}
+                        onChange={(e) =>
+                          setProp({ ...prop, nome: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="CPF / CNPJ" req>
+                      <Inp
+                        value={prop.cpfCnpj}
+                        onChange={(e) =>
+                          setProp({ ...prop, cpfCnpj: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="E-mail" req>
+                      <Inp
+                        type="email"
+                        value={prop.email}
+                        onChange={(e) =>
+                          setProp({ ...prop, email: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Filiação (Mãe ou Pai) **">
+                      <Inp
+                        value={prop.filiacao}
+                        onChange={(e) =>
+                          setProp({ ...prop, filiacao: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="RG / RNE / RANI **">
+                      <Inp
+                        value={prop.rg}
+                        onChange={(e) =>
+                          setProp({ ...prop, rg: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Data de Nascimento **">
+                      <Inp
+                        type="date"
+                        value={prop.nasc}
+                        onChange={(e) =>
+                          setProp({ ...prop, nasc: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Celular" req>
+                      <Inp
+                        value={prop.celular}
+                        onChange={(e) =>
+                          setProp({ ...prop, celular: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Telefone Fixo">
+                      <Inp
+                        value={prop.fixo}
+                        onChange={(e) =>
+                          setProp({ ...prop, fixo: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Telefone do Proprietário" req>
+                      <Inp
+                        value={prop.telProp}
+                        onChange={(e) =>
+                          setProp({ ...prop, telProp: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="Possui laudo médico (equipamentos essenciais)? **"
+                      cl="md:col-span-2"
+                    >
+                      <Toggle
+                        value={prop.laudoMedico}
+                        onChange={(v) => setProp({ ...prop, laudoMedico: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="Possui NIS para Tarifa Social? **">
+                      <Toggle
+                        value={prop.nis}
+                        onChange={(v) => setProp({ ...prop, nis: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    {prop.nis === "Sim" && (
+                      <Field label="Número do NIS" req>
+                        <Inp
+                          value={prop.numNis}
+                          onChange={(e) =>
+                            setProp({ ...prop, numNis: e.target.value })
+                          }
+                        />
+                      </Field>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {/* ABA CORRESPONDÊNCIA */}
+              {aba === "corr" && (
+                <Card title="2. Correspondência e Fatura (Conta de Energia)">
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <Field
+                      label="Deseja receber a fatura no e-mail informado?"
+                      req
+                    >
+                      <Toggle
+                        value={corr.receberEmail}
+                        onChange={(v) => setCorr({ ...corr, receberEmail: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="Data de vencimento desejada (conexão nova)">
+                      <Inp
+                        value={corr.vencimento}
+                        onChange={(e) =>
+                          setCorr({ ...corr, vencimento: e.target.value })
+                        }
+                        placeholder="Ex: dia 10"
+                      />
+                    </Field>
+                  </div>
+                  {corr.receberEmail === "Não" && (
+                    <div
+                      className="grid md:grid-cols-2 gap-3 mt-3 pt-3"
+                      style={{ borderTop: `1px dashed ${TH.bd}` }}
+                    >
+                      <Field
+                        label="CEP (preenchimento automático)"
+                        cl="md:col-span-2"
+                      >
+                        <div className="flex gap-2 items-center">
+                          <div style={{ maxWidth: 180 }}>
+                            <Inp
+                              value={corr.cep}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setCorr({ ...corr, cep: v });
+                                buscarCEP(v, "corr");
+                              }}
+                              placeholder="00000-000"
+                            />
+                          </div>
+                          {cepStatus.corr === "buscando" && (
+                            <span className="text-xs" style={{ color: TH.mt }}>
+                              buscando…
+                            </span>
+                          )}
+                          {cepStatus.corr === "ok" && (
+                            <Badge color="#016f22">endereço preenchido</Badge>
+                          )}
+                          {cepStatus.corr === "erro" && (
+                            <Badge color="#c0392b">CEP não encontrado</Badge>
+                          )}
+                        </div>
+                      </Field>
+                      <Field label="Rua / Av." cl="md:col-span-2">
+                        <Inp
+                          value={corr.rua}
+                          onChange={(e) =>
+                            setCorr({ ...corr, rua: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nº">
+                        <Inp
+                          value={corr.num}
+                          onChange={(e) =>
+                            setCorr({ ...corr, num: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Complemento">
+                        <Inp
+                          value={corr.compl}
+                          onChange={(e) =>
+                            setCorr({ ...corr, compl: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Bairro / Distrito">
+                        <Inp
+                          value={corr.bairro}
+                          onChange={(e) =>
+                            setCorr({ ...corr, bairro: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Município">
+                        <Inp
+                          value={corr.municipio}
+                          onChange={(e) =>
+                            setCorr({ ...corr, municipio: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Estado">
+                        <Inp
+                          value={corr.estado}
+                          onChange={(e) =>
+                            setCorr({ ...corr, estado: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+                  )}
+                  <Field
+                    label="Conta globalizada (código de débito automático globalizado)"
+                    cl="mt-3"
+                  >
+                    <Inp
+                      value={corr.contaGlobal}
+                      onChange={(e) =>
+                        setCorr({ ...corr, contaGlobal: e.target.value })
+                      }
+                      placeholder="Opcional"
+                    />
+                  </Field>
+                </Card>
+              )}
+
+              {/* ABA OBRA */}
+              {aba === "obra" && (
+                <Card title="3. Dados da Obra (Endereço do Padrão de Entrada / Ponto de Entrega)">
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <Field label="Zona de localização" req>
+                      <Toggle
+                        value={obra.localizacao}
+                        onChange={(v) => setObra({ ...obra, localizacao: v })}
+                        options={[
+                          { v: "Urbana", l: "Urbana" },
+                          { v: "Rural", l: "Rural" },
+                        ]}
+                      />
+                    </Field>
+                    {fluxo === "mais3" && (
+                      <Field label="Nº ART/TRT de Projeto" req>
+                        <Inp
+                          value={obra.art}
+                          onChange={(e) =>
+                            setObra({ ...obra, art: e.target.value })
+                          }
+                        />
+                      </Field>
+                    )}
+                  </div>
+
+                  {/* ===== ÁREA URBANA: busca por CEP ===== */}
+                  {obra.localizacao === "Urbana" && (
+                    <div className="grid md:grid-cols-2 gap-3 mt-3">
+                      <Field
+                        label="CEP (preenchimento automático)"
+                        req
+                        cl="md:col-span-2"
+                      >
+                        <div className="flex gap-2 items-center">
+                          <div style={{ maxWidth: 180 }}>
+                            <Inp
+                              value={obra.cep}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setObra({ ...obra, cep: v });
+                                buscarCEP(v, "obra");
+                              }}
+                              placeholder="00000-000"
+                            />
+                          </div>
+                          {cepStatus.obra === "buscando" && (
+                            <span className="text-xs" style={{ color: TH.mt }}>
+                              buscando…
+                            </span>
+                          )}
+                          {cepStatus.obra === "ok" && (
+                            <Badge color="#016f22">endereço preenchido</Badge>
+                          )}
+                          {cepStatus.obra === "erro" && (
+                            <Badge color="#c0392b">CEP não encontrado</Badge>
+                          )}
+                        </div>
+                      </Field>
+                      <Field label="Endereço" req cl="md:col-span-2">
+                        <Inp
+                          value={obra.endereco}
+                          onChange={(e) =>
+                            setObra({ ...obra, endereco: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nº" req>
+                        <Inp
+                          value={obra.num}
+                          onChange={(e) =>
+                            setObra({ ...obra, num: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Complemento">
+                        <Inp
+                          value={obra.compl}
+                          onChange={(e) =>
+                            setObra({ ...obra, compl: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Bairro" req>
+                        <Inp
+                          value={obra.bairro}
+                          onChange={(e) =>
+                            setObra({ ...obra, bairro: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Cidade / Município" req>
+                        <Inp
+                          value={obra.cidade}
+                          onChange={(e) =>
+                            setObra({ ...obra, cidade: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Estado" req>
+                        <Inp
+                          value={obra.estado}
+                          onChange={(e) =>
+                            setObra({ ...obra, estado: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Instalação / UC">
+                        <Inp
+                          value={obra.instalacaoUC}
+                          onChange={(e) =>
+                            setObra({ ...obra, instalacaoUC: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+                  )}
+
+                  {/* ===== ÁREA RURAL ===== */}
+                  {obra.localizacao === "Rural" && (
+                    <div className="grid md:grid-cols-2 gap-3 mt-3">
+                      <Field label="Município" req>
+                        <Inp
+                          value={obra.cidade}
+                          onChange={(e) =>
+                            setObra({ ...obra, cidade: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Estado" req>
+                        <Inp
+                          value={obra.estado}
+                          onChange={(e) =>
+                            setObra({ ...obra, estado: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Distrito / Comunidade / Região">
+                        <Inp
+                          value={obra.distritoComunidade}
+                          onChange={(e) =>
+                            setObra({
+                              ...obra,
+                              distritoComunidade: e.target.value,
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nome da propriedade">
+                        <Inp
+                          value={obra.nomePropriedade}
+                          onChange={(e) =>
+                            setObra({
+                              ...obra,
+                              nomePropriedade: e.target.value,
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Ponto de referência">
+                        <Inp
+                          value={obra.pontoRef}
+                          onChange={(e) =>
+                            setObra({ ...obra, pontoRef: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nº instalação mais próxima">
+                        <Inp
+                          value={obra.instProxima}
+                          onChange={(e) =>
+                            setObra({ ...obra, instProxima: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+                  )}
+
+                  {/* ===== Distância e coordenadas ===== */}
+                  <div
+                    className="grid md:grid-cols-2 gap-3 mt-3 pt-3"
+                    style={{ borderTop: `1px dashed ${TH.bd}` }}
+                  >
+                    <Field label="Distância padrão→rede CEMIG inferior a 30 m?">
+                      <Toggle
+                        value={obra.distMenor30}
+                        onChange={(v) => setObra({ ...obra, distMenor30: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field
+                      label={
+                        coordObrigatoria
+                          ? "Coordenada (lat, long)"
+                          : "Coordenada (lat, long) — opcional"
+                      }
+                      req={coordObrigatoria}
+                    >
+                      <Inp
+                        value={obra.coordenada}
+                        onChange={(e) =>
+                          setObra({ ...obra, coordenada: e.target.value })
+                        }
+                        placeholder="Ex: -19.9123, -43.9385"
+                      />
+                    </Field>
+                  </div>
+                  {coordObrigatoria && !coordPreenchida && (
+                    <div
+                      className="rounded-lg px-3 py-2 mt-2 text-xs"
+                      style={{
+                        background: "#fdecea",
+                        color: TH.rd,
+                        border: `1px solid ${TH.rd}30`,
+                      }}
+                    >
+                      ⚠ Em área rural com distância superior a 30 m da rede
+                      CEMIG, a informação da coordenada é obrigatória para
+                      localização da propriedade.
+                    </div>
+                  )}
+
+                  <div
+                    className="grid md:grid-cols-2 gap-3 mt-3 pt-3"
+                    style={{ borderTop: `1px dashed ${TH.bd}` }}
+                  >
+                    <Field label="O padrão está pronto para ser ligado?" req>
+                      <Toggle
+                        value={obra.prontoLigar}
+                        onChange={(v) => setObra({ ...obra, prontoLigar: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="UC em Área de Preservação Permanente (APP)?">
+                      <Toggle
+                        value={obra.app}
+                        onChange={(v) => setObra({ ...obra, app: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="UC em Reserva Legal?">
+                      <Toggle
+                        value={obra.reservaLegal}
+                        onChange={(v) => setObra({ ...obra, reservaLegal: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    {fluxo === "mais3" && (
+                      <Field label="Mudança em padrão coletivo existente?">
+                        <Toggle
+                          value={obra.mudancaColetivo}
+                          onChange={(v) =>
+                            setObra({ ...obra, mudancaColetivo: v })
+                          }
+                          options={[
+                            { v: "Sim", l: "Sim" },
+                            { v: "Não", l: "Não" },
+                          ]}
+                        />
+                      </Field>
+                    )}
+                    <Field label="Tipo de rede BT que atende o local">
+                      <Sel
+                        value={obra.tipoRede}
+                        onChange={(e) =>
+                          setObra({ ...obra, tipoRede: e.target.value })
+                        }
+                      >
+                        <option>Monofásica</option>
+                        <option>Bifásica</option>
+                        <option>Trifásica</option>
+                      </Sel>
+                    </Field>
+                    <Field label="Código do transformador mais próximo">
+                      <Inp
+                        value={obra.transformador}
+                        onChange={(e) =>
+                          setObra({ ...obra, transformador: e.target.value })
+                        }
+                      />
+                    </Field>
+                  </div>
+                </Card>
+              )}
+
+              {/* ABA CLASSIFICAÇÃO DETALHADA */}
+              {aba === "class" && (
+                <Card
+                  title="4. Classificação do Atendimento"
+                  sub="A demanda futura é calculada automaticamente a partir das cargas informadas nas Unidades Consumidoras."
+                >
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <Field label="Solicitação" req>
+                      <Sel
+                        value={classif.solicitacao}
+                        onChange={(e) =>
+                          setClassif({
+                            ...classif,
+                            solicitacao: e.target.value,
+                          })
+                        }
+                      >
+                        <option>Conexão Nova</option>
+                        <option>Alteração de Carga</option>
+                        <option>Caixa Existente sem Alteração</option>
+                        <option>Atendimento Híbrido</option>
+                      </Sel>
+                    </Field>
+                    <Field label="Escopo do atendimento">
+                      <Inp
+                        value={classif.escopo}
+                        onChange={(e) =>
+                          setClassif({ ...classif, escopo: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Nº total de Unidades Consumidoras" req>
+                      <Inp
+                        type="number"
+                        value={classif.nTotalUcs}
+                        onChange={(e) =>
+                          setClassif({ ...classif, nTotalUcs: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Nº de UCs a serem alteradas" req>
+                      <Inp
+                        type="number"
+                        value={classif.nUcs}
+                        onChange={(e) =>
+                          setClassif({ ...classif, nUcs: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Demanda futura (kVA) — auto">
+                      <div
+                        className="rounded-lg px-3 py-2 text-sm font-bold"
+                        style={{ background: TH.soft, color: TH.ac }}
+                      >
+                        {fmt2(demandaTotalGeral)} kVA
+                      </div>
+                    </Field>
+                    <Field label="Demanda atual (kVA)">
+                      <Inp
+                        value={classif.demandaAtual}
+                        onChange={(e) =>
+                          setClassif({
+                            ...classif,
+                            demandaAtual: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Disjuntor solicitado" req>
+                      <Inp
+                        value={classif.disjSolicitado}
+                        onChange={(e) =>
+                          setClassif({
+                            ...classif,
+                            disjSolicitado: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Disjuntor atual">
+                      <Inp
+                        value={classif.disjAtual}
+                        onChange={(e) =>
+                          setClassif({ ...classif, disjAtual: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Possui motor MONO > 15 CV?">
+                      <Toggle
+                        value={classif.motorMono}
+                        onChange={(v) =>
+                          setClassif({ ...classif, motorMono: v })
+                        }
+                        options={[
+                          { v: true, l: "Sim" },
+                          { v: false, l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="Possui motor TRI > 50 CV?">
+                      <Toggle
+                        value={classif.motorTri}
+                        onChange={(v) =>
+                          setClassif({ ...classif, motorTri: v })
+                        }
+                        options={[
+                          { v: true, l: "Sim" },
+                          { v: false, l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    {fluxo === "mais3" && (
+                      <>
+                        <Field label="Disjuntor geral do condomínio">
+                          <Inp
+                            value={classif.disjGeralCond}
+                            onChange={(e) =>
+                              setClassif({
+                                ...classif,
+                                disjGeralCond: e.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Demanda condomínio / combate a incêndio (kVA)">
+                          <Inp
+                            value={classif.demandaCond}
+                            onChange={(e) =>
+                              setClassif({
+                                ...classif,
+                                demandaCond: e.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="O disjuntor está ligado antes do disjuntor geral?">
+                          <Toggle
+                            value={classif.disjAntes}
+                            onChange={(v) =>
+                              setClassif({ ...classif, disjAntes: v })
+                            }
+                            options={[
+                              { v: "Sim", l: "Sim" },
+                              { v: "Não", l: "Não" },
+                            ]}
+                          />
+                        </Field>
+                      </>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {/* ABA UNIDADES CONSUMIDORAS + CALCULADORA */}
+              {aba === "ucs" && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3
+                        className="text-sm font-bold"
+                        style={{ color: TH.tx }}
+                      >
+                        {fluxo === "mais3"
+                          ? "5. Dados das Unidades Consumidoras"
+                          : "5. Cargas e Unidades Consumidoras"}
+                      </h3>
+                      <p className="text-xs" style={{ color: TH.mt }}>
+                        Preencha os dados e a relação de cargas de cada UC. O
+                        disjuntor é dimensionado automaticamente (ND-5.1).
+                      </p>
+                    </div>
+                    <Btn v="a" onClick={addUC}>
+                      + Adicionar UC
+                    </Btn>
+                  </div>
+                  {fluxo === "ate3" && ucs.length > 1 && (
+                    <div
+                      className="rounded-lg px-3 py-2.5 mb-3 text-xs"
+                      style={
+                        validacaoDisjuntores.ok
+                          ? {
+                              background: TH.soft,
+                              color: TH.acD,
+                              border: `1px solid ${TH.ac}30`,
+                            }
+                          : {
+                              background: "#fdecea",
+                              color: TH.rd,
+                              border: `1px solid ${TH.rd}40`,
+                            }
+                      }
+                    >
+                      <b>Regra de disjuntores (até 3 caixas, múltiplas UCs):</b>{" "}
+                      é permitido no máximo 1 disjuntor tripolar de 63 A e/ou
+                      até 2 disjuntores mono/bifásicos de 63 A, ou uma
+                      combinação entre eles.{" "}
+                      {validacaoDisjuntores.ok ? "✔ " : "⚠ "}
+                      {validacaoDisjuntores.msg}
+                    </div>
+                  )}
+                  {ucs.map((u, ui) => (
+                    <Card key={ui} cl="!p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <Badge>Unidade Consumidora {ui + 1}</Badge>
+                        {ucs.length > 1 && (
+                          <button
+                            onClick={() => delUC(ui)}
+                            className="text-xs cursor-pointer"
+                            style={{ color: TH.rd }}
+                          >
+                            ✕ Remover
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid md:grid-cols-3 gap-3 mb-3">
+                        <Field label="Tipo de solicitação" req>
+                          <Sel
+                            value={u.solicitacao}
+                            onChange={(e) =>
+                              setUC(ui, { solicitacao: e.target.value })
+                            }
+                          >
+                            <option>Conexão Nova</option>
+                            <option>Alteração de Carga</option>
+                            <option>Caixa Existente sem Alteração</option>
+                          </Sel>
+                        </Field>
+                        <Field label="Atividade principal" req>
+                          <Sel
+                            value={u.atividade}
+                            onChange={(e) =>
+                              setUC(ui, { atividade: e.target.value })
+                            }
+                          >
+                            <option>Residencial</option>
+                            <option>Comercial</option>
+                            <option>Industrial</option>
+                            <option>Rural</option>
+                          </Sel>
+                        </Field>
+                        <Field label="Ramo de atividade">
+                          <Inp
+                            value={u.ramo}
+                            onChange={(e) =>
+                              setUC(ui, { ramo: e.target.value })
+                            }
+                            placeholder="Se não residencial"
+                          />
+                        </Field>
+                        {u.solicitacao === "Conexão Nova" ? (
+                          <>
+                            <Field label="Nº Predial" req>
+                              <Inp
+                                value={u.nPredial}
+                                onChange={(e) =>
+                                  setUC(ui, { nPredial: e.target.value })
+                                }
+                              />
+                            </Field>
+                            <Field label="Complemento" req={ucs.length > 1}>
+                              <Inp
+                                value={u.complemento}
+                                onChange={(e) =>
+                                  setUC(ui, { complemento: e.target.value })
+                                }
+                                placeholder="Ex: Apto 101, Casa 1, Lj1"
+                              />
+                            </Field>
+                            <Field label="Caixa / Identificação">
+                              <Inp
+                                value={u.caixa}
+                                onChange={(e) =>
+                                  setUC(ui, { caixa: e.target.value })
+                                }
+                              />
+                            </Field>
+                          </>
+                        ) : (
+                          <>
+                            <Field label="Nº Instalação / Medidor / Caixa" req>
+                              <Inp
+                                value={u.instalacao}
+                                onChange={(e) =>
+                                  setUC(ui, { instalacao: e.target.value })
+                                }
+                              />
+                            </Field>
+                            <Field label="Complemento" req={ucs.length > 1}>
+                              <Inp
+                                value={u.complemento}
+                                onChange={(e) =>
+                                  setUC(ui, { complemento: e.target.value })
+                                }
+                                placeholder="Ex: Apto 101, Casa 1, Lj1"
+                              />
+                            </Field>
+                            <Field label="Necessária mudança de local?">
+                              <Toggle
+                                value={u.mudancaLocal}
+                                onChange={(v) => setUC(ui, { mudancaLocal: v })}
+                                options={[
+                                  { v: "Sim", l: "Sim" },
+                                  { v: "Não", l: "Não" },
+                                ]}
+                              />
+                            </Field>
+                            <Field label="Desligamento programado (corte p/ conserto)?">
+                              <Toggle
+                                value={u.desligamento}
+                                onChange={(v) => setUC(ui, { desligamento: v })}
+                                options={[
+                                  { v: "Sim", l: "Sim" },
+                                  { v: "Não", l: "Não" },
+                                ]}
+                              />
+                            </Field>
+                            <Field label="Disjuntor De">
+                              <Inp
+                                value={u.disjDe}
+                                onChange={(e) =>
+                                  setUC(ui, { disjDe: e.target.value })
+                                }
+                                placeholder="Ex: 1x40"
+                              />
+                            </Field>
+                            <Field label="Disjuntor Para">
+                              <Inp
+                                value={u.disjPara}
+                                onChange={(e) =>
+                                  setUC(ui, { disjPara: e.target.value })
+                                }
+                                placeholder="Ex: 3x60"
+                              />
+                            </Field>
+                          </>
+                        )}
+                      </div>
+                      <div
+                        className="rounded-lg p-3"
+                        style={{
+                          background: TH.bg,
+                          border: `1px dashed ${TH.bd}`,
+                        }}
+                      >
+                        <div
+                          className="text-xs font-bold mb-2"
+                          style={{ color: TH.acD }}
+                        >
+                          Relação de cargas e cálculo de demanda (ND-5.1)
+                        </div>
+                        <CalcDemanda
+                          data={u.cargas}
+                          onChange={(c) => setUC(ui, { cargas: c })}
+                          redeMono={redeMono}
+                        />
+                        {u.cargas?._disjuntores?.length > 0 && (
+                          <Field
+                            label="Disjuntor escolhido para esta UC"
+                            cl="mt-3"
+                          >
+                            <Sel
+                              value={
+                                u.disjEscolhido || u.cargas._disjuntores[0]
+                              }
+                              onChange={(e) =>
+                                setUC(ui, { disjEscolhido: e.target.value })
+                              }
+                            >
+                              {u.cargas._disjuntores.map((dj) => (
+                                <option key={dj} value={dj}>
+                                  {dj}
+                                </option>
+                              ))}
+                            </Sel>
+                          </Field>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* ABA DISJUNTORES PRUMADA (mais3) */}
+              {aba === "disj" && fluxo === "mais3" && (
+                <Card
+                  title="Disjuntores de Pavimento/Bloco e Prumada"
+                  sub="Informe os disjuntores gerais e de prumada da edificação coletiva."
+                >
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <Field label="Disjuntor geral solicitado">
+                      <Inp
+                        value={classif.disjSolicitado}
+                        onChange={(e) =>
+                          setClassif({
+                            ...classif,
+                            disjSolicitado: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Disjuntor geral atual">
+                      <Inp
+                        value={classif.disjAtual}
+                        onChange={(e) =>
+                          setClassif({ ...classif, disjAtual: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Disjuntor condomínio / combate a incêndio">
+                      <Inp
+                        value={classif.disjGeralCond}
+                        onChange={(e) =>
+                          setClassif({
+                            ...classif,
+                            disjGeralCond: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Disjuntor antes do geral?">
+                      <Toggle
+                        value={classif.disjAntes}
+                        onChange={(v) =>
+                          setClassif({ ...classif, disjAntes: v })
+                        }
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                  </div>
+                  <div
+                    className="rounded-lg p-3 mt-3 text-xs"
+                    style={{ background: TH.soft, color: TH.acD }}
+                  >
+                    Demanda total somada das UCs:{" "}
+                    <b>{fmt2(demandaTotalGeral)} kVA</b>. Para demanda total
+                    acima de 304 kVA com alteração no disjuntor geral, é exigida
+                    aprovação de projeto elétrico (item l das orientações).
+                  </div>
+                </Card>
+              )}
+
+              {/* ABA GERADOR DE EMERGÊNCIA (ate3) */}
+              {aba === "gerador" && fluxo === "ate3" && (
+                <Card
+                  title="Gerador de Emergência"
+                  sub="Informe se a instalação possui gerador de emergência."
+                >
+                  <Field label="Há gerador de emergência?" req cl="mb-3">
+                    <Toggle
+                      value={gerador.possui}
+                      onChange={(v) => setGerador({ ...gerador, possui: v })}
+                      options={[
+                        { v: "Sim", l: "Sim" },
+                        { v: "Não", l: "Não" },
+                      ]}
+                    />
+                  </Field>
+                  {gerador.possui === "Sim" && (
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <Field label="Potência do gerador (kVA)">
+                        <Inp
+                          value={gerador.potencia}
+                          onChange={(e) =>
+                            setGerador({ ...gerador, potencia: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Fonte / Combustível">
+                        <Sel
+                          value={gerador.fonte}
+                          onChange={(e) =>
+                            setGerador({ ...gerador, fonte: e.target.value })
+                          }
+                        >
+                          <option value="">Selecione</option>
+                          <option>Diesel</option>
+                          <option>Gasolina</option>
+                          <option>Gás (GLP/GNV)</option>
+                          <option>Outro</option>
+                        </Sel>
+                      </Field>
+                      <Field
+                        label="Descrição / Observações do gerador"
+                        cl="md:col-span-2"
+                      >
+                        <Inp
+                          value={gerador.descricao}
+                          onChange={(e) =>
+                            setGerador({
+                              ...gerador,
+                              descricao: e.target.value,
+                            })
+                          }
+                          placeholder="Modelo, finalidade, regime de operação..."
+                        />
+                      </Field>
+                      <div
+                        className="md:col-span-2 rounded-lg px-3 py-2 text-xs"
+                        style={{ background: TH.soft, color: TH.acD }}
+                      >
+                        O gerador de emergência opera de forma isolada (sem
+                        paralelismo com a rede CEMIG). Caso haja paralelismo ou
+                        injeção, o atendimento deve ser tratado como Geração
+                        Distribuída.
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {/* ABA OBSERVAÇÕES */}
+              {aba === "obs" && (
+                <Card
+                  title="Observações"
+                  sub="Inclua aqui informações relevantes: GD já conectada, justificativa de disjuntor, atendimento híbrido, etc."
+                >
+                  <textarea
+                    value={obs}
+                    onChange={(e) => setObs(e.target.value)}
+                    rows={6}
+                    className="w-full rounded-lg text-sm outline-none"
+                    style={{
+                      background: TH.inp,
+                      color: TH.tx,
+                      border: `1px solid ${TH.bd}`,
+                      padding: "10px",
+                    }}
+                  />
+                </Card>
+              )}
+
+              {/* ABA REVISAR E PDF */}
+              {aba === "revisar" && (
+                <div>
+                  <Card
+                    title="Revisão Final"
+                    sub="Confira o resumo antes de gerar o PDF."
+                  >
+                    <div className="grid md:grid-cols-2 gap-3 text-sm">
+                      <div
+                        className="rounded-lg p-3"
+                        style={{ background: TH.soft }}
+                      >
+                        <div
+                          className="text-xs font-bold mb-1"
+                          style={{ color: TH.acD }}
+                        >
+                          Formulário
+                        </div>
+                        <div style={{ color: TH.tx }}>
+                          {fluxo === "mais3"
+                            ? "Análise de Rede / Projeto BT (APR Web)"
+                            : "Conexão até 3 caixas (sem disjuntor geral)"}
+                        </div>
+                      </div>
+                      <div
+                        className="rounded-lg p-3"
+                        style={{ background: TH.soft }}
+                      >
+                        <div
+                          className="text-xs font-bold mb-1"
+                          style={{ color: TH.acD }}
+                        >
+                          Proprietário
+                        </div>
+                        <div style={{ color: TH.tx }}>
+                          {prop.nome || "—"} · {prop.cpfCnpj || "—"}
+                        </div>
+                      </div>
+                      <div
+                        className="rounded-lg p-3"
+                        style={{ background: TH.soft }}
+                      >
+                        <div
+                          className="text-xs font-bold mb-1"
+                          style={{ color: TH.acD }}
+                        >
+                          Obra
+                        </div>
+                        <div style={{ color: TH.tx }}>
+                          {obra.endereco || "—"}, {obra.num || "s/n"} —{" "}
+                          {obra.cidade || "—"}/{obra.estado}
+                        </div>
+                      </div>
+                      <div
+                        className="rounded-lg p-3"
+                        style={{ background: TH.acD }}
+                      >
+                        <div
+                          className="text-xs font-bold mb-1"
+                          style={{ color: TH.lime }}
+                        >
+                          Demanda Total
+                        </div>
+                        <div className="text-white font-extrabold text-lg">
+                          {fmt2(demandaTotalGeral)} kVA
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div
+                        className="text-xs font-bold mb-1"
+                        style={{ color: TH.mt }}
+                      >
+                        Unidades Consumidoras ({ucs.length})
+                      </div>
+                      {ucs.map((u, ui) => (
+                        <div
+                          key={ui}
+                          className="flex items-center justify-between py-1.5 text-sm"
+                          style={{ borderTop: `1px solid ${TH.bd}` }}
+                        >
+                          <span style={{ color: TH.tx }}>
+                            UC {ui + 1} · {u.atividade} · {u.solicitacao}
+                          </span>
+                          <span
+                            style={{ color: TH.ac }}
+                            className="font-semibold"
+                          >
+                            {fmt2(u.cargas?._demanda || 0)} kVA ·{" "}
+                            {(u.cargas?._disjuntores || []).join(", ") || "—"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                  <Card sub="Lembre-se de anexar à solicitação: planta de situação (A4), ART/TRT de projeto e documentos de regularidade do imóvel conforme as orientações da CEMIG.">
+                    <div className="flex gap-2 flex-wrap">
+                      <Btn v="dark" onClick={gerarPDF}>
+                        📄 Gerar PDF do formulário
+                      </Btn>
+                    </div>
+                  </Card>
+                </div>
+              )}
+
+              {/* NAVEGAÇÃO INFERIOR */}
+              <div className="flex items-center justify-between gap-2 mt-2 pb-8">
+                <Btn onClick={irAnt} disabled={idx === 0}>
+                  ← Anterior
+                </Btn>
+                <span className="text-xs" style={{ color: TH.mt }}>
+                  Etapa {idx + 1} de {abas.length}
+                </span>
+                {aba === "revisar" ? (
+                  <Btn v="a" onClick={gerarPDF}>
+                    📄 Gerar PDF
+                  </Btn>
+                ) : (
+                  <Btn v="a" onClick={irProx}>
+                    Próximo →
+                  </Btn>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
