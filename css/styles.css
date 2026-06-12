@@ -50,7 +50,7 @@ body {
   z-index: 100;
 }
 .topbar-inner {
-  max-width: 1080px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 12px 20px;
   display: flex;
@@ -64,8 +64,8 @@ body {
   gap: 10px;
   text-decoration: none;
 }
-.logo-cemig svg { height: 34px; width: auto; }
-.logo-cemig .logo-img { height: 34px; width: auto; display: block; }
+.logo-cemig svg { height: 28px; width: auto; }
+.logo-cemig .logo-img { height: 28px; width: auto; display: block; }
 .topbar-links { display: flex; gap: 8px; flex-wrap: wrap; }
 .topbar-links a {
   font-size: 12px;
@@ -82,7 +82,7 @@ body {
 
 /* ---------- CABEÇALHO DO FORMULÁRIO ---------- */
 .form-header {
-  max-width: 1080px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 28px 20px 8px;
 }
@@ -96,7 +96,7 @@ body {
   margin-top: 6px;
   font-size: 14px;
   color: var(--texto-suave);
-  max-width: 760px;
+  max-width: 1360px;
 }
 .flow-badge {
   display: inline-flex;
@@ -113,7 +113,7 @@ body {
 
 /* ---------- LAYOUT DUAS COLUNAS (sidebar vertical) ---------- */
 .layout {
-  max-width: 1180px;
+  max-width: 1360px;
   margin: 0 auto;
   display: flex;
   gap: 0;

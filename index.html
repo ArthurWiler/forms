@@ -2,13 +2,22 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=5"
+    />
     <title>Formulário Orçamento de Conexão BT — Cemig</title>
-    <meta name="description" content="Formulário digital para orçamento de conexão / alteração de carga em Baixa Tensão (BT) — atendimento individual ou em agrupamento até 3 caixas e agrupamento com proteção geral via APR Web." />
+    <meta
+      name="description"
+      content="Formulário digital para orçamento de conexão / alteração de carga em Baixa Tensão (BT) — atendimento individual ou em agrupamento até 3 caixas e agrupamento com proteção geral via APR Web."
+    />
 
     <!-- Fontes -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
 
     <!-- Estilos -->
     <link rel="stylesheet" href="css/styles.css" />
@@ -27,7 +36,11 @@
     <script src="js/calc.js"></script>
 
     <!-- Componentes React (JSX via Babel) -->
-    <script type="text/babel" src="js/components.js" data-presets="react"></script>
+    <script
+      type="text/babel"
+      src="js/components.js"
+      data-presets="react"
+    ></script>
     <script type="text/babel" src="js/app.js" data-presets="react"></script>
 
     <!-- Aviso caso aberto via file:// (Babel não carrega scripts externos sem HTTP) -->
@@ -35,17 +48,21 @@
       window.addEventListener("load", function () {
         setTimeout(function () {
           var root = document.getElementById("root");
-          if (root && root.children.length === 0 && location.protocol === "file:") {
+          if (
+            root &&
+            root.children.length === 0 &&
+            location.protocol === "file:"
+          ) {
             root.innerHTML =
               '<div style="max-width:640px;margin:60px auto;padding:24px;font-family:DM Sans,sans-serif;' +
               'background:#fff8e6;border:1px solid #f0d48a;border-radius:12px;color:#8a6d1a;line-height:1.6">' +
-              '<strong>Para executar este formulário, sirva-o por um servidor HTTP.</strong><br>' +
-              'O navegador bloqueia o carregamento dos arquivos <code>js/*.js</code> quando a página é aberta ' +
-              'diretamente do disco (<code>file://</code>).<br><br>' +
-              'Na pasta do projeto, rode:<br>' +
+              "<strong>Para executar este formulário, sirva-o por um servidor HTTP.</strong><br>" +
+              "O navegador bloqueia o carregamento dos arquivos <code>js/*.js</code> quando a página é aberta " +
+              "diretamente do disco (<code>file://</code>).<br><br>" +
+              "Na pasta do projeto, rode:<br>" +
               '<code style="display:block;background:#fff;padding:8px;border-radius:6px;margin-top:6px">python3 -m http.server 8000</code>' +
-              'e acesse <code>http://localhost:8000</code> — ou faça o deploy (ex.: Vercel/Netlify).' +
-              '</div>';
+              "e acesse <code>http://localhost:8000</code> — ou faça o deploy (ex.: Vercel/Netlify)." +
+              "</div>";
           }
         }, 1500);
       });

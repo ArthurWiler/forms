@@ -6,28 +6,46 @@
 
 const ORIENTACOES = {
   intro:
-    "Leia as orientações antes de iniciar. Este formulário destina-se a pedidos de Ligação Nova ou Alteração de Carga em Baixa Tensão (BT), conforme a REN ANEEL nº 1.000/2021. Os campos se adaptam ao seu caso conforme o preenchimento.",
+    "Leia as orientações antes de iniciar. Este formulário destina-se a pedidos de Ligação Nova ou Alteração de Carga em Baixa Tensão (BT), conforme a Resolução Normativa ANEEL nº 1.000/2021.",
+  geral: {
+    titulo: "Orientações gerais",
+    itens: [
+      "Para solicitações com carga instalada acima de 75 kW, é obrigatório anexar a ART de projeto paga, planta situação, e formulário preenchdido no APR Web.",
+      "Conforme artigo 9° da Resolução Normativa ANEEL Nº 1.000/2021 que trata da representação, o responsável técnico deverá apresentar procuração (pessoa física ou pessoa jurídica) para solicitações em nome de terceiros.",
+      "Para os pedidos de Conexão Nova é obrigatório anexar ao formulário um documento que comprove a propriedade ou posse do local a ser atendido. Para unidade consumidora localizada em área urbana, também deverá ser anexado documento que comprove a regularidade do imóvel.",
+      "Deverão ser apresentados, no ato da solicitação, documentos originais do titular pessoa física (documento oficial com foto e CPF) e, em caso de pessoa jurídica, os documentos relativos à sua constituição, ao seu registro e do(s) seus(s) representante(s) legal(is)",
+      "Caso a propriedade esteja localizada em área protegida pela legislação, é obrigatório apresentar documento que comprove a regularização ambiental emitido por órgão competente.",
+      "Caso a propriedade esteja em entorno de reservatório deve ser apresentada autorização da concessionária ou do responsável pelo reservatório.",
+      "O padrão deverá ser instalado dentro da propriedade.",
+      "Conforme regulação vigente, o responsável técnico deverá apresentar procuração (pessoa física ou pessoa jurídica) para solicitações em nome de terceiros.",
+      "Para os casos de conexão com GRID ZERO é necessário protocolar solicitação como um pedido de Geração distribuída.Verificar no site da CEMIG >> Cemig Atende >> Geração Distribuída >> Manual de Solicitação de Grid Zero (GD sem injeção)",
+      "Conforme regulação da ANEEL, caso seja marcado 'Sim' para a pergunta 'O padrão está pronto para ser ligado?*', o pedido de vistoria e ligação será disparado automaticamente após conclusão das etapas do orçamento de conexão.Caso seja marcado 'Não', você deve solicitar seu pedido de vistoria e ligação em até 120 dias após a conclusão das etapas do orçamento de conexão. Lembrando que o orçamento de conexão poderá ser cancelado em caso de duas reprovações pelo mesmo motivo e que há cobrança de taxa a partir do segundo serviço realizado. Diante disso, a primeira caixa relacionada no campo Unidade Consumidora 1 será a caixa a ser energizada no final do processo de conexão. A mesma regra poderá ser aplicada para alteração de carga com mudança de local.",
+      "O pedido poderá ser reprovado no momento da visita técnica caso não sejam identificadas as cargas declaradas neste formulário.",
+    ],
+  },
   individual: {
     titulo:
       "Atendimento individual ou agrupamento com até 3 caixas sem proteção geral",
     itens: [
-      "Ligação Nova ou Aumento de Carga de unidade consumidora individual urbana e trifásica, com carga instalada até 75 kW.",
-      "Aumento de carga para unidade consumidora individual rural, com carga instalada até 75 kW.",
-      "Agrupamento com até 3 caixas de medição com somente uma unidade trifásica, desde que as proteções dos disjuntores bipolares e do tripolar sejam de no máximo 63 A.",
-      "Neste caso é feito o detalhamento das cargas de CADA unidade consumidora (cálculo de demanda ND-5.1).",
-      "É importante informar as coordenadas da propriedade — obrigatórias para área rural a mais de 30 m da rede.",
+      "Para Conexão Nova, o número predial, a atividade principal da unidade consumidora (Residencial, Comercial, Industrial ou Rural) e o Ramo de Atividade (caso não seja residencial). Quando aplicável, informar também o complemento da caixa (ex: Cond, Lj1, Casa 1, Apto 101 etc.).",
+      "Para opção Alteração de Carga ou Caixa existente sem Alteração de Carga, informar o número da instalação, o número do medidor ou o número da caixa (complemento).",
+      "Para Alteração de Carga ou Caixa existente sem Alteração de Carga, informar o novo ramo de atividade e a alteração de complemento, somente se houver alteração;",
+      "O cálculo da carga instalada total em kW, a demanda em kVA e o preenchimento do disjuntor será feito automaticamente",
+      "Para Alteração de Carga,o cálculo da carga instalada total em kW, a demanda em kVA e o preenchimento do disjuntor futuro será feito automaticamente",
     ],
   },
   coletivo: {
     titulo:
       "Agrupamento com proteção geral, atendimento híbrido ou múltiplas torres/blocos",
     itens: [
-      "Aplica-se quando há disjuntor geral: agrupamento com mais de 3 caixas, padrão trifásico acima de 75 kW, ou UCs com proteção acima de 60/63 A.",
-      "É necessário solicitar antecipadamente a Análise de Carga/Rede e emitir ART, TRT ou RRT por Responsável Técnico habilitado.",
+      "O atendimento pela Cemig ao pedido de Conexão/aumento de carga ficará condicionado à apresentação do projeto elétrico juntamente com a Anotação de Responsabilidade Técnica (ou equivalente) de projeto, para todas as edificações de uso coletivo com demanda total superior a 304kVA.",
+      "É obrigatório anexar no momento do pedido a planta de situação da edificação, com a indicação do padrão de entrada e a distância do ramal de entrada, conforme ND-5.2, com exceção para solicitação de alteração de carga sem mudança de local do ramal de Conexão. O Documento deve ser encaminhado no portal Cemig Atende e no APR Web.",
       "Preenche-se uma previsão de carga geral e os dados de identificação de cada unidade consumidora.",
       "Para empreendimentos com múltiplas torres ou blocos, cada bloco pode ter seu disjuntor geral e seu disjuntor de combate a incêndio.",
       "Para demanda total superior a 304 kVA, o atendimento fica condicionado à apresentação do projeto elétrico com ART/TRT.",
       "Motores monofásicos acima de 15 CV e/ou trifásicos acima de 50 CV exigem o formulário de análise de partida de motores.",
+      "Para atendimentos híbridos, deve ser informada na planta de situação: quantidade de ramais de Conexão com a respectiva numeração predial de cada ponto de entrega, demanda de cada ramal de Conexão com a respectiva proteção geral (quando couber) e especificações dos cabos subterrâneos. Na ART/TRT deverão ser informados todos os números prediais que serão atendidos. Em casos de desmembramento, o ramal que não sofrerá alteração poderá apenas ser indicado na planta.",
+      "Se a solicitação for para atendimento híbrido, é obrigatório indicar na planta de situação o número predial de cada unidade consumidora",
     ],
   },
   callout:
@@ -36,29 +54,35 @@ const ORIENTACOES = {
 
 // ===== Solicitação -> Escopos dependentes =====
 const SOLICITACOES = [
-  "1- Disjuntor individual acima de 75 kW",
-  "2- Disjuntor geral em padrão coletivo",
-  "3- Atendimento Híbrido",
-  "4- Atendimento a Empreendimento com Múltiplas Torres ou Blocos",
+  "1- Disjuntor individual abaixo de 75 kW",
+  "2- Disjuntor individual acima de 75 kW",
+  "3- Disjuntor geral em padrão coletivo",
+  "4- Atendimento Híbrido",
+  "5- Atendimento a Empreendimento com Múltiplas Torres ou Blocos",
 ];
 const ESCOPOS = {
-  "1- Disjuntor individual acima de 75 kW": [
+  "1- Disjuntor individual abaixo de 75 kW": [
     "Ligação Nova",
     "Aumento de Carga",
     "Adequação de padrão",
   ],
-  "2- Disjuntor geral em padrão coletivo": [
+  "2- Disjuntor individual acima de 75 kW": [
+    "Ligação Nova",
+    "Aumento de Carga",
+    "Adequação de padrão",
+  ],
+  "3- Disjuntor geral em padrão coletivo": [
     "Ligação Nova",
     "Alteração de Carga com alteração do disjuntor geral",
     "Alteração de Carga sem alteração do disjuntor geral",
     "Adequação de padrão",
   ],
-  "3- Atendimento Híbrido": [
+  "4- Atendimento Híbrido": [
     "Ligação Nova",
     "Aumento de Carga",
     "Adequação de padrão",
   ],
-  "4- Atendimento a Empreendimento com Múltiplas Torres ou Blocos": [
+  "5- Atendimento a Empreendimento com Múltiplas Torres ou Blocos": [
     "Ligação Nova",
     "Outro",
   ],
@@ -126,6 +150,7 @@ function App() {
   });
   const coletivo = atend.disjGeral === "Sim";
   const multiTorres = coletivo && atend.solicitacao === SOLICITACOES[3];
+  const acima75 = atend.acima75;
 
   // ---- Dados compartilhados ----
   const [prop, setProp] = useState({
@@ -309,7 +334,8 @@ function App() {
   };
 
   // ===== Disjuntor geral obrigatório? =====
-  const disjGeralObrigatorio = atend.biAcima63 || atend.triAcima63;
+  const disjGeralObrigatorio =
+    atend.biAcima63 || atend.triAcima63 || atend.disjGeral === "Sim";
 
   const maiorCorrenteUC = useMemo(() => {
     if (multiTorres) return 0;
@@ -880,7 +906,7 @@ function App() {
               target="_blank"
               rel="noreferrer"
             >
-              APRWEB
+              APR Web
             </a>
           </div>
         </div>
@@ -938,6 +964,24 @@ function App() {
                   marginBottom: 4,
                 }}
               >
+                {ORIENTACOES.geral.titulo}
+              </div>
+              <ul className="orient-list">
+                {ORIENTACOES.geral.itens.map((it, i) => (
+                  <li key={i} className="orient-item">
+                    <span className="orient-num">{i + 1}</span>
+                    <p>{it}</p>
+                  </li>
+                ))}
+              </ul>
+              <div
+                style={{
+                  fontWeight: 700,
+                  color: "var(--verde-escuro)",
+                  fontSize: 14,
+                  margin: "18px 0 4px",
+                }}
+              >
                 {ORIENTACOES.individual.titulo}
               </div>
               <ul className="orient-list">
@@ -991,6 +1035,67 @@ function App() {
               title="Tipo de Atendimento"
               sub="O tipo de formulário é definido pela presença ou não de disjuntor geral. Os campos seguintes se adaptam à sua escolha."
             >
+              <div className="grid grid-2 divider">
+                <Field label="Solicitação" req>
+                  <Sel
+                    value={atend.solicitacao}
+                    onChange={(e) =>
+                      setAtend({ ...atend, solicitacao: e.target.value })
+                    }
+                  >
+                    {SOLICITACOES.map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </Sel>
+                </Field>
+                <Field
+                  label="Escopo do Atendimento"
+                  req
+                  hint="As opções dependem da solicitação escolhida."
+                >
+                  <Sel
+                    value={atend.escopo}
+                    onChange={(e) =>
+                      setAtend({ ...atend, escopo: e.target.value })
+                    }
+                  >
+                    {(ESCOPOS[atend.solicitacao] || []).map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </Sel>
+                </Field>
+                {multiTorres && (
+                  <React.Fragment>
+                    <Field label="Atendimento a">
+                      <Toggle
+                        value={atend.atendA}
+                        onChange={(v) => setAtend({ ...atend, atendA: v })}
+                        options={[
+                          { v: "Bloco", l: "Bloco" },
+                          { v: "Torre", l: "Torre" },
+                        ]}
+                      />
+                    </Field>
+                    <Field
+                      label="Nº de Blocos / Torres"
+                      req
+                      hint="Cada bloco terá disjuntor geral próprio e disjuntor de combate a incêndio."
+                    >
+                      <Inp
+                        type="number"
+                        value={atend.nBlocos}
+                        onChange={(e) =>
+                          setAtend({
+                            ...atend,
+                            nBlocos: Math.max(1, parseInt(e.target.value)),
+                          })
+                        }
+                      />
+                    </Field>
+                  </React.Fragment>
+                )}
+              </div>
+
               <div className="grid grid-2">
                 <Field
                   label="Possui disjuntor geral (proteção geral)?"
@@ -1022,105 +1127,32 @@ function App() {
                       onChange={(e) =>
                         setAtend({
                           ...atend,
-                          nUCs: Math.max(1, parseInt(e.target.value) || 1),
+                          nUCs: Math.max(1, parseInt(e.target.value)),
+                          disjGeral:
+                            parseInt(e.target.value) > 3 ? "Sim" : "Não",
                         })
                       }
+                      options={[
+                        { v: true, l: "Sim" },
+                        { v: false, l: "Não" },
+                      ]}
                     />
                   </Field>
                 )}
               </div>
 
-              {coletivo && (
-                <div className="grid grid-2 divider">
-                  <Field label="Solicitação" req>
-                    <Sel
-                      value={atend.solicitacao}
-                      onChange={(e) =>
-                        setAtend({ ...atend, solicitacao: e.target.value })
-                      }
-                    >
-                      {SOLICITACOES.map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </Sel>
-                  </Field>
-                  <Field
-                    label="Escopo do Atendimento"
-                    req
-                    hint="As opções dependem da solicitação escolhida."
-                  >
-                    <Sel
-                      value={atend.escopo}
-                      onChange={(e) =>
-                        setAtend({ ...atend, escopo: e.target.value })
-                      }
-                    >
-                      {(ESCOPOS[atend.solicitacao] || []).map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </Sel>
-                  </Field>
-                  {multiTorres && (
-                    <React.Fragment>
-                      <Field label="Atendimento a">
-                        <Toggle
-                          value={atend.atendA}
-                          onChange={(v) => setAtend({ ...atend, atendA: v })}
-                          options={[
-                            { v: "Bloco", l: "Bloco" },
-                            { v: "Torre", l: "Torre" },
-                          ]}
-                        />
-                      </Field>
-                      <Field
-                        label="Nº de Blocos / Torres"
-                        req
-                        hint="Cada bloco terá disjuntor geral próprio e disjuntor de combate a incêndio."
-                      >
-                        <Inp
-                          type="number"
-                          value={atend.nBlocos}
-                          onChange={(e) =>
-                            setAtend({
-                              ...atend,
-                              nBlocos: Math.max(
-                                1,
-                                parseInt(e.target.value) || 1,
-                              ),
-                            })
-                          }
-                        />
-                      </Field>
-                    </React.Fragment>
-                  )}
-                </div>
-              )}
-
               <div className="grid grid-2 divider">
-                <Field label="Há UC bifásica com proteção acima de 60 A (NEMA) / 63 A (IEC)?">
+                <Field label="Há múltiplas unidades consumidoras com proteção acima de 63 A?">
                   <Toggle
                     value={atend.biAcima63}
-                    onChange={(v) => setAtend({ ...atend, biAcima63: v })}
-                    options={[
-                      { v: true, l: "Sim" },
-                      { v: false, l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field label="Há UC trifásica com proteção acima de 60 A (NEMA) / 63 A (IEC)?">
-                  <Toggle
-                    value={atend.triAcima63}
-                    onChange={(v) => setAtend({ ...atend, triAcima63: v })}
-                    options={[
-                      { v: true, l: "Sim" },
-                      { v: false, l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field label="Atendimento individual acima de 75 kW em BT?">
-                  <Toggle
-                    value={atend.acima75}
-                    onChange={(v) => setAtend({ ...atend, acima75: v })}
+                    onChange={(v) =>
+                      setAtend({
+                        ...atend,
+                        biAcima63: v,
+                        triAcima63: v,
+                        disjGeral: v ? "Sim" : "Não", // converte booleano para string
+                      })
+                    }
                     options={[
                       { v: true, l: "Sim" },
                       { v: false, l: "Não" },
@@ -1134,7 +1166,7 @@ function App() {
                   <Field
                     label="Disjuntor geral do agrupamento"
                     req
-                    hint={`Obrigatório quando há UC bi/trifásica com proteção acima de 60/63 A. Opções acima da maior faixa das UCs (${maiorCorrenteUC || "—"} A).`}
+                    hint={`Obrigatório quando houver mais de três unidades consumidoras mono ou bipolares com proteção superior a 63 A, ou quando existirem duas ou mais unidades consumidoras com disjuntor trifásico. Opções acima da maior faixa das UCs (${maiorCorrenteUC || "—"} A).`}
                   >
                     <Sel
                       value={atend.disjuntorGeral}
@@ -1166,8 +1198,8 @@ function App() {
                 {multiTorres
                   ? "MÚLTIPLAS TORRES/BLOCOS: cada bloco terá disjuntor geral, demanda, quantidade de UCs e disjuntor de combate a incêndio — com preenchimento em massa."
                   : coletivo
-                    ? "Atendimento COLETIVO: identificação das UCs + previsão de carga geral digitada."
-                    : "Atendimento INDIVIDUAL: identificação + detalhamento de cargas (ND-5.1) de CADA unidade consumidora."}
+                    ? "Atendimento COLETIVO: identificação das UCs e previsão de carga geral."
+                    : "Atendimento INDIVIDUAL: identificação e detalhamento da carga de cada unidade consumidora."}
               </div>
             </Card>
           )}
@@ -1332,7 +1364,7 @@ function App() {
                         <span className="spinner"></span>
                       )}
                       {cepStatus.corr === "ok" && (
-                        <Badge>endereço preenchido</Badge>
+                        <Badge>Endereço encontrado</Badge>
                       )}
                       {cepStatus.corr === "erro" && (
                         <span
@@ -1461,7 +1493,7 @@ function App() {
                         <span className="spinner"></span>
                       )}
                       {cepStatus.obra === "ok" && (
-                        <Badge>endereço preenchido</Badge>
+                        <Badge>Endereço encontrado</Badge>
                       )}
                       {cepStatus.obra === "erro" && (
                         <span
