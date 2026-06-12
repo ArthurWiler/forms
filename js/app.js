@@ -1,10 +1,9 @@
 /* ============================================================
    CEMIG — Aplicação principal (React + Babel)
    Formulário unificado de Orçamento de Conexão BT
-   (Individual e Coletivo no mesmo fluxo, campos dinâmicos)
+   Individual · Coletivo · Múltiplas Torres/Blocos
    ============================================================ */
 
-// Orientações oficiais (conteúdo do portal Cemig)
 const ORIENTACOES = {
   intro:
     "Leia as orientações antes de iniciar. Este formulário destina-se a pedidos de Ligação Nova ou Alteração de Carga em Baixa Tensão (BT), conforme a REN ANEEL nº 1.000/2021. Os campos se adaptam ao seu caso conforme o preenchimento.",
@@ -15,17 +14,18 @@ const ORIENTACOES = {
       "Ligação Nova ou Aumento de Carga de unidade consumidora individual urbana e trifásica, com carga instalada até 75 kW.",
       "Aumento de carga para unidade consumidora individual rural, com carga instalada até 75 kW.",
       "Agrupamento com até 3 caixas de medição com somente uma unidade trifásica, desde que as proteções dos disjuntores bipolares e do tripolar sejam de no máximo 63 A.",
-      "Neste caso é feito o detalhamento das cargas da unidade consumidora (cálculo de demanda ND-5.1).",
+      "Neste caso é feito o detalhamento das cargas de CADA unidade consumidora (cálculo de demanda ND-5.1).",
       "É importante informar as coordenadas da propriedade — obrigatórias para área rural a mais de 30 m da rede.",
     ],
   },
   coletivo: {
     titulo:
-      "Agrupamento com proteção geral, atendimento híbrido ou individual acima de 75 kW em BT",
+      "Agrupamento com proteção geral, atendimento híbrido ou múltiplas torres/blocos",
     itens: [
       "Aplica-se quando há disjuntor geral: agrupamento com mais de 3 caixas, padrão trifásico acima de 75 kW, ou UCs com proteção acima de 60/63 A.",
       "É necessário solicitar antecipadamente a Análise de Carga/Rede e emitir ART, TRT ou RRT por Responsável Técnico habilitado.",
-      "Neste caso preenche-se apenas uma previsão de carga geral e os dados de identificação de cada unidade consumidora.",
+      "Preenche-se uma previsão de carga geral e os dados de identificação de cada unidade consumidora.",
+      "Para empreendimentos com múltiplas torres ou blocos, cada bloco pode ter seu disjuntor geral e seu disjuntor de combate a incêndio.",
       "Para demanda total superior a 304 kVA, o atendimento fica condicionado à apresentação do projeto elétrico com ART/TRT.",
       "Motores monofásicos acima de 15 CV e/ou trifásicos acima de 50 CV exigem o formulário de análise de partida de motores.",
     ],
@@ -34,22 +34,52 @@ const ORIENTACOES = {
     "Pedido de vistoria e ligação: se o padrão estiver pronto para ligar, a vistoria é disparada após o orçamento; caso contrário, há prazo para solicitá-la. O orçamento pode ser cancelado após reprovações pelo mesmo motivo.",
 };
 
-// Bloco de UC no modo coletivo (com valores padrão, conforme exemplo)
+// ===== Solicitação -> Escopos dependentes =====
+const SOLICITACOES = [
+  "1- Disjuntor individual acima de 75 kW",
+  "2- Disjuntor geral em padrão coletivo",
+  "3- Atendimento Híbrido",
+  "4- Atendimento a Empreendimento com Múltiplas Torres ou Blocos",
+];
+const ESCOPOS = {
+  "1- Disjuntor individual acima de 75 kW": [
+    "Ligação Nova",
+    "Aumento de Carga",
+    "Adequação de padrão",
+  ],
+  "2- Disjuntor geral em padrão coletivo": [
+    "Ligação Nova",
+    "Alteração de Carga com alteração do disjuntor geral",
+    "Alteração de Carga sem alteração do disjuntor geral",
+    "Adequação de padrão",
+  ],
+  "3- Atendimento Híbrido": [
+    "Ligação Nova",
+    "Aumento de Carga",
+    "Adequação de padrão",
+  ],
+  "4- Atendimento a Empreendimento com Múltiplas Torres ou Blocos": [
+    "Ligação Nova",
+    "Outro",
+  ],
+};
+
+// Bloco de UC (identificação no coletivo) — valores padrão
 const ucBlocoPadrao = (i) => ({
   identificacao: `UC ${i + 1}`,
   nPredial: "",
   complemento: "",
   caixa: "",
-  solicitacao: "Conexão Nova", // padrão
-  mudancaLocal: "Não", // padrão
-  atividade: "Residencial", // padrão
+  solicitacao: "Conexão Nova",
+  mudancaLocal: "Não",
+  atividade: "Residencial",
   ramo: "",
   instalacao: "",
   disjDe: "",
   disjPara: "Bipolar 63 A",
 });
 
-// UC detalhada no modo individual (usa a calculadora ND-5.1)
+// UC detalhada (individual) — identificação + calculadora
 const ucDetalhadaPadrao = () => ({
   solicitacao: "Conexão Nova",
   atividade: "Residencial",
@@ -58,10 +88,21 @@ const ucDetalhadaPadrao = () => ({
   complemento: "",
   caixa: "",
   instalacao: "",
+  mudancaLocal: "Não",
   disjDe: "",
   disjPara: "",
   disjEscolhido: "",
   cargas: { qtds: CAT.map(() => 0), tipoA: "res", catA: 0, mots: [] },
+});
+
+// Torre/Bloco (modo múltiplas torres) — preenchimento em massa
+const blocoPadrao = (i) => ({
+  nome: `${i + 1}`,
+  disjGeral: "Tripolar 200 A",
+  demandaBloco: "",
+  qtdUCs: "",
+  disjIncendio: "Bipolar 63 A",
+  demandaIncendio: "",
 });
 
 // ============================================================
@@ -70,19 +111,21 @@ const ucDetalhadaPadrao = () => ({
 function App() {
   const [aba, setAba] = useState("orient");
 
-  // ---- Tipo de atendimento (define-se pela presença de disjuntor geral) ----
-  // disjGeral: "Não" => Individual (detalhamento) | "Sim" => Coletivo (previsão + blocos)
+  // ---- Tipo de atendimento ----
   const [atend, setAtend] = useState({
-    disjGeral: "Não", // possui disjuntor geral?
-    nUCs: 1, // nº de unidades consumidoras
-    biAcima63: false, // UC bifásica com proteção > 60/63 A
-    triAcima63: false, // UC trifásica com proteção > 60/63 A
-    acima75: false, // individual acima de 75 kW
-    solicitacao: "Conexão Nova", // padrão
+    disjGeral: "Não", // possui disjuntor geral? Não=Individual, Sim=Coletivo
+    nUCs: 1,
+    biAcima63: false,
+    triAcima63: false,
+    acima75: false,
+    solicitacao: SOLICITACOES[1], // padrão (coletivo)
     escopo: "Ligação Nova", // padrão
-    disjuntorGeral: "", // faixa do disjuntor geral (coletivo)
+    disjuntorGeral: "",
+    atendA: "Bloco", // múltiplas torres: atendimento a Bloco/Torre
+    nBlocos: 1,
   });
   const coletivo = atend.disjGeral === "Sim";
+  const multiTorres = coletivo && atend.solicitacao === SOLICITACOES[3];
 
   // ---- Dados compartilhados ----
   const [prop, setProp] = useState({
@@ -143,43 +186,87 @@ function App() {
   const [obs, setObs] = useState("");
   const [cepStatus, setCepStatus] = useState({ obra: "", corr: "" });
 
-  // ---- Previsão de carga (modo coletivo) ----
+  // ---- Previsão de carga (coletivo comum) ----
   const [prev, setPrev] = useState({
     ilum: "",
     tomada: "",
     chuveiro: "",
     ar: "",
-    outrosDesc: "",
+    outrosDesc: "Outros itens nas UCs",
     outros: "",
     demanda: "",
   });
-  const prevTotalKw = useMemo(() => {
-    return ["ilum", "tomada", "chuveiro", "ar", "outros"].reduce(
-      (s, k) => s + (parseFloat(String(prev[k]).replace(",", ".")) || 0),
-      0,
-    );
-  }, [prev]);
+  const num = (v) => parseFloat(String(v).replace(",", ".")) || 0;
+  const prevTotalKw = useMemo(
+    () =>
+      ["ilum", "tomada", "chuveiro", "ar", "outros"].reduce(
+        (s, k) => s + num(prev[k]),
+        0,
+      ),
+    [prev],
+  );
 
-  // ---- UC detalhada (modo individual) ----
-  const [ucDet, setUcDet] = useState(ucDetalhadaPadrao());
+  // ---- UCs detalhadas (individual) — uma calculadora por UC ----
+  const [ucsDet, setUcsDet] = useState([ucDetalhadaPadrao()]);
+  const setUcDet = (i, patch) =>
+    setUcsDet((p) => p.map((u, idx) => (idx === i ? { ...u, ...patch } : u)));
 
-  // ---- Blocos de UC (modo coletivo) ----
+  // ---- Blocos de UC (coletivo comum) ----
   const [ucBlocos, setUcBlocos] = useState([ucBlocoPadrao(0)]);
   const setBloco = (i, patch) =>
     setUcBlocos((p) => p.map((u, idx) => (idx === i ? { ...u, ...patch } : u)));
 
-  // Sincroniza nº de blocos com nUCs (modo coletivo)
+  // ---- Torres/Blocos (múltiplas torres) ----
+  const [blocos, setBlocos] = useState([blocoPadrao(0)]);
+  const setTorre = (i, patch) =>
+    setBlocos((p) => p.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
+  const replicarPrimeiro = () =>
+    setBlocos((p) =>
+      p.map((b, i) => (i === 0 ? b : { ...p[0], nome: `${i + 1}` })),
+    );
+
+  // Sincroniza nº de UCs (individual: máx 3; coletivo: blocos de identificação)
   useEffect(() => {
-    if (!coletivo) return;
     const n = Math.max(1, Number(atend.nUCs) || 1);
-    setUcBlocos((prevBlocos) => {
-      if (prevBlocos.length === n) return prevBlocos;
-      const arr = [...prevBlocos];
-      while (arr.length < n) arr.push(ucBlocoPadrao(arr.length));
+    if (coletivo) {
+      setUcBlocos((prevB) => {
+        if (prevB.length === n) return prevB;
+        const arr = [...prevB];
+        while (arr.length < n) arr.push(ucBlocoPadrao(arr.length));
+        while (arr.length > n) arr.pop();
+        return arr;
+      });
+    } else {
+      const ni = Math.min(n, 3); // individual: até 3 caixas
+      setUcsDet((prevD) => {
+        if (prevD.length === ni) return prevD;
+        const arr = [...prevD];
+        while (arr.length < ni) arr.push(ucDetalhadaPadrao());
+        while (arr.length > ni) arr.pop();
+        return arr;
+      });
+    }
+  }, [atend.nUCs, coletivo]);
+
+  // Sincroniza nº de torres/blocos
+  useEffect(() => {
+    if (!multiTorres) return;
+    const n = Math.max(1, Number(atend.nBlocos) || 1);
+    setBlocos((prevB) => {
+      if (prevB.length === n) return prevB;
+      const arr = [...prevB];
+      while (arr.length < n) arr.push(blocoPadrao(arr.length));
       while (arr.length > n) arr.pop();
       return arr;
     });
-  }, [atend.nUCs, coletivo]);
+  }, [atend.nBlocos, multiTorres]);
+
+  // Escopo coerente com a solicitação
+  useEffect(() => {
+    const ops = ESCOPOS[atend.solicitacao] || [];
+    if (!ops.includes(atend.escopo))
+      setAtend((a) => ({ ...a, escopo: ops[0] || "" }));
+  }, [atend.solicitacao]);
 
   const redeMono =
     obra.tipoRede === "Monofásica" || obra.tipoRede === "Bifásica";
@@ -199,7 +286,7 @@ function App() {
         setCepStatus((p) => ({ ...p, [alvo]: "erro" }));
         return;
       }
-      if (alvo === "obra") {
+      if (alvo === "obra")
         setObra((o) => ({
           ...o,
           endereco: dd.logradouro || o.endereco,
@@ -207,7 +294,7 @@ function App() {
           cidade: dd.localidade || o.cidade,
           estado: dd.uf || o.estado,
         }));
-      } else {
+      else
         setCorr((c) => ({
           ...c,
           rua: dd.logradouro || c.rua,
@@ -215,7 +302,6 @@ function App() {
           municipio: dd.localidade || c.municipio,
           estado: dd.uf || c.estado,
         }));
-      }
       setCepStatus((p) => ({ ...p, [alvo]: "ok" }));
     } catch (e) {
       setCepStatus((p) => ({ ...p, [alvo]: "erro" }));
@@ -223,60 +309,112 @@ function App() {
   };
 
   // ===== Disjuntor geral obrigatório? =====
-  // Obrigatório quando há UC bi/tri com proteção acima de 60/63 A (ou quando há disjuntor geral declarado).
   const disjGeralObrigatorio = atend.biAcima63 || atend.triAcima63;
 
-  // Maior corrente entre os disjuntores das UCs (para limitar opções do geral)
   const maiorCorrenteUC = useMemo(() => {
-    if (coletivo) {
+    if (multiTorres) return 0;
+    if (coletivo)
       return ucBlocos.reduce(
         (mx, u) =>
           Math.max(mx, correnteDisj(u.disjPara), correnteDisj(u.disjDe)),
         0,
       );
-    }
-    const esc =
-      ucDet.disjEscolhido || (ucDet.cargas?._disjuntores || [])[0] || "";
-    return correnteDisj(esc);
-  }, [coletivo, ucBlocos, ucDet]);
+    return ucsDet.reduce((mx, u) => {
+      const esc = u.disjEscolhido || (u.cargas?._disjuntores || [])[0] || "";
+      return Math.max(mx, correnteDisj(esc));
+    }, 0);
+  }, [multiTorres, coletivo, ucBlocos, ucsDet]);
 
-  // Opções de disjuntor geral: somente faixas MAIORES que a maior UC (exclui a igual)
   const opcoesDisjGeral = useMemo(
     () => disjuntoresGeraisAcima(maiorCorrenteUC),
     [maiorCorrenteUC],
   );
 
-  // ===== Demanda total =====
+  // ===== Validação de disjuntores (individual com várias UCs) =====
+  const validacaoDisjuntores = useMemo(() => {
+    if (coletivo || ucsDet.length <= 1) return { ok: true, msg: "" };
+    let tri = 0,
+      monoBi = 0;
+    ucsDet.forEach((u) => {
+      const esc = u.disjEscolhido || (u.cargas?._disjuntores || [])[0] || "";
+      if (/Tripolar/i.test(esc)) tri++;
+      else if (/Mono|Bipolar/i.test(esc)) monoBi++;
+    });
+    const acima63 = ucsDet.some((u) => {
+      const esc = u.disjEscolhido || (u.cargas?._disjuntores || [])[0] || "";
+      return correnteDisj(esc) > 63;
+    });
+    if (acima63)
+      return {
+        ok: false,
+        msg: "Há UC com disjuntor acima de 63 A — o atendimento exige proteção geral (coletivo). Ajuste o Tipo de Atendimento.",
+      };
+    if (tri > 1)
+      return {
+        ok: false,
+        msg: `Permitido no máximo 1 disjuntor tripolar de 63 A (atual: ${tri}).`,
+      };
+    if (monoBi > 2)
+      return {
+        ok: false,
+        msg: `Permitidos no máximo 2 disjuntores mono/bifásicos de 63 A (atual: ${monoBi}).`,
+      };
+    return {
+      ok: true,
+      msg: `Combinação válida: ${tri} tripolar(es) + ${monoBi} mono/bifásico(s) de 63 A.`,
+    };
+  }, [coletivo, ucsDet]);
+
+  // ===== Totais =====
+  const totalUcsEmpreendimento = useMemo(
+    () => blocos.reduce((s, b) => s + (parseInt(b.qtdUCs) || 0), 0),
+    [blocos],
+  );
   const demandaTotalGeral = useMemo(() => {
-    if (coletivo)
-      return parseFloat(String(prev.demanda).replace(",", ".")) || 0;
-    return ucDet.cargas?._demanda || 0;
-  }, [coletivo, prev.demanda, ucDet]);
+    if (multiTorres)
+      return blocos.reduce(
+        (s, b) => s + num(b.demandaBloco) + num(b.demandaIncendio),
+        0,
+      );
+    if (coletivo) return num(prev.demanda);
+    return ucsDet.reduce((s, u) => s + (u.cargas?._demanda || 0), 0);
+  }, [multiTorres, blocos, coletivo, prev.demanda, ucsDet]);
 
   const coordObrigatoria =
     obra.localizacao === "Rural" && obra.distMenor30 === "Não";
   const coordPreenchida = !!obra.coordenada;
 
-  // ===== ABAS (barra vertical) =====
-  // Fluxo único; o conteúdo das etapas muda conforme Individual/Coletivo.
+  // ===== ABAS (barra vertical) — UCs vem ANTES de Cargas =====
   const abas = [
     { k: "orient", l: "Orientações" },
     { k: "tipo", l: "Tipo de Atendimento" },
     { k: "prop", l: "Proprietário" },
     { k: "corr", l: "Correspondência" },
     { k: "obra", l: "Dados da Obra" },
-    { k: "cargas", l: coletivo ? "Previsão de Carga" : "Cargas da UC" },
-    { k: "ucs", l: "Unidades Consumidoras" },
+  ];
+  if (multiTorres) {
+    abas.push({ k: "blocos", l: "Torres / Blocos" });
+  } else {
+    abas.push({ k: "ucs", l: "Unidades Consumidoras" });
+    abas.push({
+      k: "cargas",
+      l: coletivo ? "Previsão de Carga" : "Cargas das UCs",
+    });
+  }
+  if (!coletivo) abas.push({ k: "gerador", l: "Gerador de Emergência" });
+  abas.push(
     { k: "obs", l: "Observações" },
     { k: "revisar", l: "Prévia & PDF" },
-  ];
-  // Gerador de emergência só no individual
-  if (!coletivo)
-    abas.splice(7, 0, { k: "gerador", l: "Gerador de Emergência" });
+  );
 
   const idx = abas.findIndex((a) => a.k === aba);
   const irProx = () => setAba(abas[Math.min(idx + 1, abas.length - 1)].k);
   const irAnt = () => setAba(abas[Math.max(idx - 1, 0)].k);
+
+  // Se a aba ativa deixou de existir (mudança de modo), volta para "tipo"
+  useEffect(() => {
+    if (idx === -1) setAba("tipo");
+  }, [idx]);
 
   // ============================================================
   // GERAR PDF
@@ -306,9 +444,11 @@ function App() {
       doc.setFontSize(7);
       doc.setTextColor(150, 210, 175);
       doc.text(
-        coletivo
-          ? "Agrupamento com Proteção Geral / Projeto BT (APR Web)"
-          : "Atendimento individual ou agrupamento até 3 caixas sem proteção geral",
+        multiTorres
+          ? "Empreendimento com Múltiplas Torres ou Blocos"
+          : coletivo
+            ? "Agrupamento com Proteção Geral / Projeto BT (APR Web)"
+            : "Atendimento individual ou agrupamento até 3 caixas sem proteção geral",
         MG,
         13.5,
       );
@@ -391,23 +531,70 @@ function App() {
       doc.text(val, MG + CW - 2, cy + 5.2, { align: "right" });
       cy += 9;
     };
+    const tabela = (headers, widths, rows) => {
+      checkSpace(6);
+      doc.setFillColor(215, 218, 226);
+      doc.rect(MG, cy, CW, 5.5, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.6);
+      doc.setTextColor(90, 96, 115);
+      let x = MG + 2;
+      headers.forEach((h, i) => {
+        doc.text(h, x, cy + 3.8);
+        x += widths[i];
+      });
+      cy += 5.5;
+      let ri = 0;
+      rows.forEach((row) => {
+        checkSpace(5);
+        doc.setFillColor(
+          ri % 2 ? 247 : 255,
+          ri % 2 ? 248 : 255,
+          ri % 2 ? 251 : 255,
+        );
+        doc.rect(MG, cy, CW, 5, "F");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(30, 32, 42);
+        let xx = MG + 2;
+        row.forEach((cell, i) => {
+          doc.text(
+            doc.splitTextToSize(String(cell ?? "—"), widths[i] - 2)[0] || "—",
+            xx,
+            cy + 3.5,
+          );
+          xx += widths[i];
+        });
+        ri++;
+        cy += 5;
+      });
+    };
 
     drawTopBar();
 
     sec("TIPO DE ATENDIMENTO");
     fullLine(
       "Modalidade",
-      coletivo
-        ? "Coletivo - Agrupamento com Proteção Geral (APR Web)"
-        : "Individual / até 3 caixas sem proteção geral",
+      multiTorres
+        ? "Empreendimento com Múltiplas Torres ou Blocos"
+        : coletivo
+          ? "Coletivo - Agrupamento com Proteção Geral (APR Web)"
+          : "Individual / até 3 caixas sem proteção geral",
     );
-    kvPairs([
+    const tipoPairs = [
       ["Possui disjuntor geral?", atend.disjGeral],
-      ["Nº de unidades consumidoras", atend.nUCs],
-      ["Solicitação", atend.solicitacao],
-      ["Escopo do atendimento", atend.escopo],
-    ]);
-    if (coletivo && atend.disjuntorGeral)
+      [
+        "Nº de unidades consumidoras",
+        multiTorres ? totalUcsEmpreendimento : atend.nUCs,
+      ],
+    ];
+    if (coletivo)
+      tipoPairs.push(
+        ["Solicitação", atend.solicitacao],
+        ["Escopo do atendimento", atend.escopo],
+      );
+    kvPairs(tipoPairs);
+    if (coletivo && !multiTorres && atend.disjuntorGeral)
       fullLine("Disjuntor geral", atend.disjuntorGeral);
     cy += 2;
 
@@ -480,9 +667,65 @@ function App() {
       ]);
     cy += 2;
 
-    if (coletivo) {
-      // Previsão de carga + blocos de UC
-      sec("4.  PREVISÃO DE CARGA");
+    if (multiTorres) {
+      sec("4.  EMPREENDIMENTO COM MÚLTIPLAS TORRES OU BLOCOS");
+      kvPairs([
+        ["Atendimento a", atend.atendA],
+        ["Nº de blocos/torres", blocos.length],
+        ["Total de UCs do empreendimento", totalUcsEmpreendimento],
+        ["", ""],
+      ]);
+      tabela(
+        [
+          "Bloco",
+          "Disjuntor Geral",
+          "Dem. Bloco (kVA)",
+          "Qtd UCs",
+          "Disj. Cond./Incêndio",
+          "Dem. Cond. (kVA)",
+        ],
+        [16, 38, 28, 18, 46, 36],
+        blocos.map((b) => [
+          b.nome,
+          b.disjGeral,
+          b.demandaBloco,
+          b.qtdUCs,
+          b.disjIncendio,
+          b.demandaIncendio,
+        ]),
+      );
+      cy += 2;
+      totRow(
+        "DEMANDA TOTAL DO EMPREENDIMENTO",
+        `${fmt2(demandaTotalGeral)} kVA`,
+      );
+      cy += 2;
+    } else if (coletivo) {
+      sec("4.  UNIDADES CONSUMIDORAS");
+      ucBlocos.forEach((u, ui) => {
+        checkSpace(6);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(0, 70, 33);
+        doc.text(`${u.identificacao || "UC " + (ui + 1)}`, MG + 1, cy + 4);
+        cy += 6;
+        const pares = [
+          ["Nº Predial", u.nPredial],
+          ["Complemento", u.complemento],
+          ["Caixa", u.caixa],
+          ["Solicitação", u.solicitacao],
+          ["Mudança de local", u.mudancaLocal],
+          ["Atividade principal", u.atividade],
+          ["Ramo de atividade", u.ramo],
+          ["Instalação", u.instalacao],
+        ];
+        if (u.solicitacao !== "Conexão Nova")
+          pares.push(["Disjuntor De", u.disjDe]);
+        pares.push(["Disjuntor Para", u.disjPara]);
+        kvPairs(pares);
+        cy += 1;
+      });
+      sec("5.  PREVISÃO DE CARGA");
       kvPairs([
         ["Iluminação (kW)", prev.ilum],
         ["Tomada (kW)", prev.tomada],
@@ -496,114 +739,69 @@ function App() {
         `${fmt2(demandaTotalGeral)} kVA`,
       );
       cy += 2;
-      sec("5.  UNIDADES CONSUMIDORAS");
-      ucBlocos.forEach((u, ui) => {
-        checkSpace(6);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(0, 70, 33);
-        doc.text(`${u.identificacao || "UC " + (ui + 1)}`, MG + 1, cy + 4);
-        cy += 6;
-        kvPairs([
-          ["Nº Predial", u.nPredial],
-          ["Complemento", u.complemento],
-          ["Caixa", u.caixa],
-          ["Solicitação", u.solicitacao],
-          ["Mudança de local", u.mudancaLocal],
-          ["Atividade principal", u.atividade],
-          ["Ramo de atividade", u.ramo],
-          ["Instalação", u.instalacao],
-          ["Disjuntor De", u.disjDe],
-          ["Disjuntor Para", u.disjPara],
-        ]);
-        cy += 1;
-      });
       if (atend.disjuntorGeral) {
         sec("6.  DISJUNTOR GERAL");
         fullLine("Disjuntor geral do agrupamento", atend.disjuntorGeral);
         cy += 2;
       }
     } else {
-      // Individual: detalhamento da UC
-      sec("4.  UNIDADE CONSUMIDORA (DETALHAMENTO)");
-      kvPairs([
-        ["Solicitação", ucDet.solicitacao],
-        ["Atividade principal", ucDet.atividade],
-        ["Nº Predial", ucDet.nPredial],
-        ["Complemento", ucDet.complemento],
-        ["Caixa / Identificação", ucDet.caixa],
-        ["Ramo de atividade", ucDet.ramo],
-        ["Nº Instalação", ucDet.instalacao],
-        ["Disjuntor De", ucDet.disjDe],
-        ["Disjuntor Para", ucDet.disjPara],
-        ["", ""],
-      ]);
-      const qtds = ucDet.cargas?.qtds || [];
-      const itens = CAT.map((c, i) => ({ ...c, q: qtds[i] || 0 })).filter(
-        (x) => x.q > 0,
-      );
-      if (itens.length) {
-        checkSpace(6);
-        doc.setFillColor(215, 218, 226);
-        doc.rect(MG, cy, CW, 5.5, "F");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(7);
-        doc.setTextColor(90, 96, 115);
-        doc.text("Equipamento", MG + 2, cy + 3.8);
-        doc.text("Pot. (W)", MG + 95, cy + 3.8);
-        doc.text("Qtd", MG + 125, cy + 3.8, { align: "center" });
-        doc.text("Total (W)", MG + CW - 2, cy + 3.8, { align: "right" });
-        cy += 5.5;
-        let ri = 0;
-        itens.forEach((it) => {
-          checkSpace(5);
-          doc.setFillColor(
-            ri % 2 ? 247 : 255,
-            ri % 2 ? 248 : 255,
-            ri % 2 ? 251 : 255,
+      // INDIVIDUAL: identificação + cargas detalhadas POR UC
+      ucsDet.forEach((u, ui) => {
+        sec(`4.${ui + 1}  UNIDADE CONSUMIDORA ${ui + 1}`);
+        const pares = [
+          ["Solicitação", u.solicitacao],
+          ["Atividade principal", u.atividade],
+          ["Ramo de atividade", u.ramo],
+          ["Nº Predial", u.nPredial],
+          ["Complemento", u.complemento],
+          ["Caixa / Identificação", u.caixa],
+        ];
+        if (u.solicitacao !== "Conexão Nova")
+          pares.push(
+            ["Nº Instalação", u.instalacao],
+            ["Mudança de local", u.mudancaLocal],
+            ["Disjuntor De", u.disjDe],
           );
-          doc.rect(MG, cy, CW, 5, "F");
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.5);
-          doc.setTextColor(30, 32, 42);
-          doc.text(it.n, MG + 2, cy + 3.5);
-          doc.text(fmtW(it.w), MG + 95, cy + 3.5);
-          doc.text(String(it.q), MG + 125, cy + 3.5, { align: "center" });
-          doc.text(fmtW(it.q * it.w), MG + CW - 2, cy + 3.5, {
-            align: "right",
-          });
-          ri++;
-          cy += 5;
-        });
-      }
-      (ucDet.cargas?.mots || [])
-        .filter((m) => (m.q || 0) > 0)
-        .forEach((m) => {
-          checkSpace(5);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.5);
-          doc.setTextColor(60, 60, 70);
-          doc.text(
-            `Motor ${m.fase === "mono" ? "Monofásico" : "Trifásico"} ${m.cv} CV (Cat. ${(m.col || "").replace("c", "")}) - Qtd: ${m.q}`,
-            MG + 2,
-            cy + 3.5,
-          );
-          cy += 5;
-        });
-      checkSpace(8);
-      totRow(
-        `Carga ${fmt2(ucDet.cargas?._cargaKw || 0)} kW  |  Demanda`,
-        `${fmt2(ucDet.cargas?._demanda || 0)} kVA`,
-      );
-      if (ucDet.cargas?._disjuntores?.length)
-        fullLine(
-          "Disjuntor sugerido (ND-5.1)",
-          ucDet.cargas._disjuntores.join("  ·  "),
+        pares.push(["Disjuntor Para", u.disjPara || u.disjEscolhido]);
+        kvPairs(pares);
+        const qtds = u.cargas?.qtds || [];
+        const itens = CAT.map((c, i) => ({ ...c, q: qtds[i] || 0 })).filter(
+          (x) => x.q > 0,
         );
-      if (ucDet.disjEscolhido)
-        fullLine("Disjuntor escolhido", ucDet.disjEscolhido);
-      cy += 2;
-
+        if (itens.length) {
+          tabela(
+            ["Equipamento", "Pot. (W)", "Qtd", "Total (W)"],
+            [96, 30, 18, 38],
+            itens.map((it) => [it.n, fmtW(it.w), it.q, fmtW(it.q * it.w)]),
+          );
+        }
+        (u.cargas?.mots || [])
+          .filter((m) => (m.q || 0) > 0)
+          .forEach((m) => {
+            checkSpace(5);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(60, 60, 70);
+            doc.text(
+              `Motor ${m.fase === "mono" ? "Monofásico" : "Trifásico"} ${m.cv} CV (Cat. ${(m.col || "").replace("c", "")}) - Qtd: ${m.q}`,
+              MG + 2,
+              cy + 3.5,
+            );
+            cy += 5;
+          });
+        checkSpace(8);
+        totRow(
+          `Carga ${fmt2(u.cargas?._cargaKw || 0)} kW  |  Demanda`,
+          `${fmt2(u.cargas?._demanda || 0)} kVA`,
+        );
+        if (u.cargas?._disjuntores?.length)
+          fullLine(
+            "Disjuntor sugerido (ND-5.1)",
+            u.cargas._disjuntores.join("  ·  "),
+          );
+        if (u.disjEscolhido) fullLine("Disjuntor escolhido", u.disjEscolhido);
+        cy += 2;
+      });
       sec("5.  GERADOR DE EMERGÊNCIA");
       const gp = [["Há gerador de emergência?", gerador.possui]];
       if (gerador.possui === "Sim")
@@ -638,8 +836,11 @@ function App() {
     const nomeArq = (prop.nome || "formulario")
       .replace(/[^a-zA-Z0-9]/g, "_")
       .slice(0, 30);
-    doc.save(`CEMIG_${coletivo ? "coletivo" : "individual"}_${nomeArq}.pdf`);
+    doc.save(
+      `CEMIG_${multiTorres ? "torres" : coletivo ? "coletivo" : "individual"}_${nomeArq}.pdf`,
+    );
   }, [
+    multiTorres,
     coletivo,
     atend,
     prop,
@@ -647,8 +848,10 @@ function App() {
     obra,
     prev,
     prevTotalKw,
-    ucDet,
+    ucsDet,
     ucBlocos,
+    blocos,
+    totalUcsEmpreendimento,
     gerador,
     obs,
     demandaTotalGeral,
@@ -659,7 +862,6 @@ function App() {
   // ============================================================
   return (
     <div>
-      {/* TOPBAR */}
       <div className="topbar">
         <div className="topbar-inner">
           <a className="logo-cemig" href="#">
@@ -684,7 +886,6 @@ function App() {
         </div>
       </div>
 
-      {/* CABEÇALHO */}
       <div className="form-header">
         <h1>
           Formulário de Orçamento de Conexão / Alteração de Carga em Baixa
@@ -692,20 +893,19 @@ function App() {
         </h1>
         <p>
           Preenchimento digital unificado para solicitações em BT, conforme as
-          normas CEMIG ND-5.1 / ND-5.2 e a REN ANEEL nº 1.000/2021. Os campos se
-          adaptam conforme o preenchimento.
+          normas CEMIG ND-5.1 / ND-5.2 e a REN ANEEL nº 1.000/2021.
         </p>
         <span className="flow-badge">
-          {coletivo
-            ? "Coletivo — Agrupamento com Proteção Geral"
-            : "Individual / até 3 caixas sem proteção geral"}{" "}
+          {multiTorres
+            ? "Múltiplas Torres / Blocos"
+            : coletivo
+              ? "Coletivo — Proteção Geral"
+              : "Individual / até 3 caixas"}{" "}
           · Demanda {fmt2(demandaTotalGeral)} kVA
         </span>
       </div>
 
-      {/* LAYOUT DUAS COLUNAS */}
       <div className="layout">
-        {/* SIDEBAR VERTICAL */}
         <aside className="sidebar">
           <div className="sidebar-title">Progresso do preenchimento</div>
           {abas.map((a, i) => (
@@ -722,7 +922,6 @@ function App() {
           ))}
         </aside>
 
-        {/* COLUNA PRINCIPAL */}
         <main className="main-col fade-in" key={aba}>
           {/* ===== ORIENTAÇÕES ===== */}
           {aba === "orient" && (
@@ -785,7 +984,7 @@ function App() {
             </Card>
           )}
 
-          {/* ===== TIPO DE ATENDIMENTO (define individual x coletivo) ===== */}
+          {/* ===== TIPO DE ATENDIMENTO ===== */}
           {aba === "tipo" && (
             <Card
               eyebrow="Etapa 1"
@@ -796,7 +995,7 @@ function App() {
                 <Field
                   label="Possui disjuntor geral (proteção geral)?"
                   req
-                  hint="Sim = atendimento coletivo (agrupamento). Não = atendimento individual (detalhamento de cargas)."
+                  hint="Sim = atendimento coletivo. Não = individual com detalhamento de cargas por UC."
                 >
                   <Toggle
                     value={atend.disjGeral}
@@ -807,53 +1006,95 @@ function App() {
                     ]}
                   />
                 </Field>
-                <Field label="Solicitação" req>
-                  <Sel
-                    value={atend.solicitacao}
-                    onChange={(e) =>
-                      setAtend({ ...atend, solicitacao: e.target.value })
+                {!multiTorres && (
+                  <Field
+                    label="Nº de Unidades Consumidoras"
+                    req
+                    hint={
+                      coletivo
+                        ? "Será gerado um bloco de identificação para cada UC."
+                        : "Individual: até 3 caixas. Cada UC terá identificação e detalhamento de cargas."
                     }
                   >
-                    <option>Conexão Nova</option>
-                    <option>Alteração de Carga</option>
-                    <option>Caixa Existente sem Alteração</option>
-                    <option>Atendimento Híbrido</option>
-                  </Sel>
-                </Field>
-                <Field label="Escopo do atendimento" req>
-                  <Sel
-                    value={atend.escopo}
-                    onChange={(e) =>
-                      setAtend({ ...atend, escopo: e.target.value })
-                    }
-                  >
-                    <option>Ligação Nova</option>
-                    <option>Aumento de Carga</option>
-                    <option>Redução de Carga</option>
-                    <option>Adequação de Padrão</option>
-                  </Sel>
-                </Field>
-                <Field
-                  label="Nº de Unidades Consumidoras"
-                  req
-                  hint={
-                    coletivo
-                      ? "Será gerado um bloco de preenchimento para cada UC."
-                      : "No individual há uma única unidade detalhada."
-                  }
-                >
-                  <Inp
-                    type="number"
-                    value={atend.nUCs}
-                    onChange={(e) =>
-                      setAtend({
-                        ...atend,
-                        nUCs: Math.max(1, parseInt(e.target.value) || 1),
-                      })
-                    }
-                  />
-                </Field>
+                    <Inp
+                      type="number"
+                      value={atend.nUCs}
+                      onChange={(e) =>
+                        setAtend({
+                          ...atend,
+                          nUCs: Math.max(1, parseInt(e.target.value) || 1),
+                        })
+                      }
+                    />
+                  </Field>
+                )}
               </div>
+
+              {coletivo && (
+                <div className="grid grid-2 divider">
+                  <Field label="Solicitação" req>
+                    <Sel
+                      value={atend.solicitacao}
+                      onChange={(e) =>
+                        setAtend({ ...atend, solicitacao: e.target.value })
+                      }
+                    >
+                      {SOLICITACOES.map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </Sel>
+                  </Field>
+                  <Field
+                    label="Escopo do Atendimento"
+                    req
+                    hint="As opções dependem da solicitação escolhida."
+                  >
+                    <Sel
+                      value={atend.escopo}
+                      onChange={(e) =>
+                        setAtend({ ...atend, escopo: e.target.value })
+                      }
+                    >
+                      {(ESCOPOS[atend.solicitacao] || []).map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </Sel>
+                  </Field>
+                  {multiTorres && (
+                    <React.Fragment>
+                      <Field label="Atendimento a">
+                        <Toggle
+                          value={atend.atendA}
+                          onChange={(v) => setAtend({ ...atend, atendA: v })}
+                          options={[
+                            { v: "Bloco", l: "Bloco" },
+                            { v: "Torre", l: "Torre" },
+                          ]}
+                        />
+                      </Field>
+                      <Field
+                        label="Nº de Blocos / Torres"
+                        req
+                        hint="Cada bloco terá disjuntor geral próprio e disjuntor de combate a incêndio."
+                      >
+                        <Inp
+                          type="number"
+                          value={atend.nBlocos}
+                          onChange={(e) =>
+                            setAtend({
+                              ...atend,
+                              nBlocos: Math.max(
+                                1,
+                                parseInt(e.target.value) || 1,
+                              ),
+                            })
+                          }
+                        />
+                      </Field>
+                    </React.Fragment>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-2 divider">
                 <Field label="Há UC bifásica com proteção acima de 60 A (NEMA) / 63 A (IEC)?">
@@ -888,12 +1129,12 @@ function App() {
                 </Field>
               </div>
 
-              {disjGeralObrigatorio && (
+              {disjGeralObrigatorio && !multiTorres && (
                 <div className="geral-box">
                   <Field
                     label="Disjuntor geral do agrupamento"
                     req
-                    hint={`Obrigatório quando há UC bi/trifásica com proteção acima de 60/63 A. As opções iniciam acima da maior faixa das UCs (${maiorCorrenteUC || "—"} A).`}
+                    hint={`Obrigatório quando há UC bi/trifásica com proteção acima de 60/63 A. Opções acima da maior faixa das UCs (${maiorCorrenteUC || "—"} A).`}
                   >
                     <Sel
                       value={atend.disjuntorGeral}
@@ -912,8 +1153,7 @@ function App() {
                   {opcoesDisjGeral.length === 0 && (
                     <div className="alert alert-info" style={{ marginTop: 10 }}>
                       Defina os disjuntores das unidades consumidoras para
-                      liberar as opções de disjuntor geral (faixa superior à
-                      maior UC).
+                      liberar as opções de disjuntor geral.
                     </div>
                   )}
                 </div>
@@ -923,9 +1163,11 @@ function App() {
                 className={"alert " + (coletivo ? "alert-ok" : "alert-info")}
                 style={{ marginTop: 16 }}
               >
-                {coletivo
-                  ? "Atendimento COLETIVO: será preenchida uma previsão de carga geral e os dados de cada unidade consumidora."
-                  : "Atendimento INDIVIDUAL: será feito o detalhamento das cargas da unidade consumidora (cálculo de demanda ND-5.1)."}
+                {multiTorres
+                  ? "MÚLTIPLAS TORRES/BLOCOS: cada bloco terá disjuntor geral, demanda, quantidade de UCs e disjuntor de combate a incêndio — com preenchimento em massa."
+                  : coletivo
+                    ? "Atendimento COLETIVO: identificação das UCs + previsão de carga geral digitada."
+                    : "Atendimento INDIVIDUAL: identificação + detalhamento de cargas (ND-5.1) de CADA unidade consumidora."}
               </div>
             </Card>
           )}
@@ -1071,11 +1313,7 @@ function App() {
               </div>
               {corr.receberEmail === "Não" && (
                 <div className="grid grid-2 divider">
-                  <Field
-                    label="CEP (preenchimento automático)"
-                    span={2}
-                    hint="Digite o CEP para preencher o endereço automaticamente."
-                  >
+                  <Field label="CEP (preenchimento automático)" span={2}>
                     <div
                       style={{ display: "flex", gap: 8, alignItems: "center" }}
                     >
@@ -1204,12 +1442,7 @@ function App() {
               </div>
               {obra.localizacao === "Urbana" && (
                 <div className="grid grid-2" style={{ marginTop: 14 }}>
-                  <Field
-                    label="CEP (preenchimento automático)"
-                    req
-                    span={2}
-                    hint="Digite o CEP para preencher endereço, bairro, cidade e estado."
-                  >
+                  <Field label="CEP (preenchimento automático)" req span={2}>
                     <div
                       style={{ display: "flex", gap: 8, alignItems: "center" }}
                     >
@@ -1439,148 +1672,170 @@ function App() {
             </Card>
           )}
 
-          {/* ===== CARGAS: previsão (coletivo) ou detalhamento (individual) ===== */}
-          {aba === "cargas" && coletivo && (
-            <Card
-              eyebrow="Carga do agrupamento"
-              title="Previsão de Carga"
-              sub="Informe a previsão de carga instalada por grupo (kW) e a demanda total prevista (kVA) do agrupamento. Os valores são digitados — não há detalhamento por equipamento no atendimento coletivo."
-            >
-              <div className="prev-carga">
-                <Field label="Iluminação (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.ilum}
-                    onChange={(e) => setPrev({ ...prev, ilum: e.target.value })}
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Tomada (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.tomada}
-                    onChange={(e) =>
-                      setPrev({ ...prev, tomada: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Chuveiro (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.chuveiro}
-                    onChange={(e) =>
-                      setPrev({ ...prev, chuveiro: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Ar Cond. (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.ar}
-                    onChange={(e) => setPrev({ ...prev, ar: e.target.value })}
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Outros (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.outros}
-                    onChange={(e) =>
-                      setPrev({ ...prev, outros: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </Field>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <Field
-                  label="Descrição (Outros)"
-                  hint="Ex: Outros itens nas UCs — bombas, elevadores, áreas comuns…"
-                >
-                  <Inp
-                    value={prev.outrosDesc}
-                    onChange={(e) =>
-                      setPrev({ ...prev, outrosDesc: e.target.value })
-                    }
-                    placeholder="Outros itens nas UCs"
-                  />
-                </Field>
-              </div>
-              <div className="prev-total">
-                <div className="kpi">
-                  <div className="kpi-label">Total Carga Instalada</div>
-                  <div className="kpi-value">{fmt2(prevTotalKw)} kW</div>
-                </div>
-                <div className="kpi" style={{ flex: 1.4 }}>
-                  <div className="kpi-label">Demanda prevista (kVA) *</div>
-                  <Inp
-                    type="number"
-                    value={prev.demanda}
-                    onChange={(e) =>
-                      setPrev({ ...prev, demanda: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </div>
-                <div className="kpi dark">
-                  <div className="kpi-label">Demanda do atendimento</div>
-                  <div className="kpi-value" style={{ fontSize: 18 }}>
-                    {fmt2(demandaTotalGeral)} kVA
+          {/* ===== TORRES / BLOCOS (múltiplas torres, preenchimento em massa) ===== */}
+          {aba === "blocos" && multiTorres && (
+            <div>
+              <Card
+                eyebrow="Empreendimento"
+                title="Atendimento a Empreendimento com Múltiplas Torres ou Blocos"
+                sub={`Cada ${atend.atendA.toLowerCase()} pode ter seu disjuntor geral e seu disjuntor de combate a incêndio. Preencha o primeiro e use "Replicar" para preenchimento em massa.`}
+              >
+                <div className="kpi-row">
+                  <div className="kpi">
+                    <div className="kpi-label">Atendimento a</div>
+                    <div className="kpi-value" style={{ fontSize: 15 }}>
+                      {atend.atendA}
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">
+                      Total de UCs do empreendimento
+                    </div>
+                    <div className="kpi-value">{totalUcsEmpreendimento}</div>
+                  </div>
+                  <div className="kpi dark">
+                    <div className="kpi-label">
+                      Demanda total do empreendimento
+                    </div>
+                    <div className="kpi-value" style={{ fontSize: 18 }}>
+                      {fmt2(demandaTotalGeral)} kVA
+                    </div>
                   </div>
                 </div>
-              </div>
-              {demandaTotalGeral > 304 && (
-                <div className="alert alert-info" style={{ marginTop: 14 }}>
-                  Demanda total acima de 304 kVA: o atendimento fica
-                  condicionado à apresentação do projeto elétrico com ART/TRT.
-                </div>
-              )}
-            </Card>
-          )}
 
-          {aba === "cargas" && !coletivo && (
-            <Card
-              eyebrow="Detalhamento"
-              title="Cargas da Unidade Consumidora"
-              sub="Detalhe os equipamentos da unidade. A demanda e o disjuntor são calculados automaticamente (ND-5.1)."
-            >
-              <CalcDemanda
-                data={ucDet.cargas}
-                onChange={(c) => setUcDet({ ...ucDet, cargas: c })}
-                redeMono={redeMono}
-              />
-              {ucDet.cargas?._disjuntores?.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <Field label="Disjuntor escolhido para esta UC">
-                    <Sel
-                      value={
-                        ucDet.disjEscolhido || ucDet.cargas._disjuntores[0]
-                      }
-                      onChange={(e) =>
-                        setUcDet({ ...ucDet, disjEscolhido: e.target.value })
-                      }
-                    >
-                      {ucDet.cargas._disjuntores.map((dj) => (
-                        <option key={dj} value={dj}>
-                          {dj}
-                        </option>
-                      ))}
-                    </Sel>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "flex-end",
+                    flexWrap: "wrap",
+                    marginBottom: 14,
+                  }}
+                >
+                  <Field
+                    label={`Nº de ${atend.atendA === "Bloco" ? "Blocos" : "Torres"}`}
+                  >
+                    <div style={{ maxWidth: 120 }}>
+                      <Inp
+                        type="number"
+                        value={atend.nBlocos}
+                        onChange={(e) =>
+                          setAtend({
+                            ...atend,
+                            nBlocos: Math.max(1, parseInt(e.target.value) || 1),
+                          })
+                        }
+                      />
+                    </div>
                   </Field>
+                  <Btn variant="ghost" onClick={replicarPrimeiro}>
+                    ⧉ Replicar {atend.atendA} 1 para todos
+                  </Btn>
                 </div>
-              )}
-            </Card>
+
+                {blocos.map((b, bi) => (
+                  <div key={bi} className="uc-block">
+                    <div className="uc-block-head">
+                      <span className="uc-block-title">
+                        {atend.atendA} {b.nome || bi + 1}
+                      </span>
+                      <Badge>
+                        {bi + 1} de {blocos.length}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-3">
+                      <Field
+                        label={`Identificação do ${atend.atendA.toLowerCase()}`}
+                      >
+                        <Inp
+                          value={b.nome}
+                          onChange={(e) =>
+                            setTorre(bi, { nome: e.target.value })
+                          }
+                          placeholder={`${bi + 1}`}
+                        />
+                      </Field>
+                      <Field label="Disjuntor Geral" req>
+                        <Sel
+                          value={b.disjGeral}
+                          onChange={(e) =>
+                            setTorre(bi, { disjGeral: e.target.value })
+                          }
+                        >
+                          <option value="">Selecione…</option>
+                          {DISJ.filter((d) => d.tipo === "tri").map((d) => (
+                            <option key={d.fx} value={d.fx}>
+                              {d.fx}
+                            </option>
+                          ))}
+                        </Sel>
+                      </Field>
+                      <Field label={`Demanda do ${atend.atendA} (kVA)`} req>
+                        <Inp
+                          type="number"
+                          value={b.demandaBloco}
+                          onChange={(e) =>
+                            setTorre(bi, { demandaBloco: e.target.value })
+                          }
+                          placeholder="Ex: 75"
+                        />
+                      </Field>
+                      <Field label={`Qtd. de UCs por ${atend.atendA}`} req>
+                        <Inp
+                          type="number"
+                          value={b.qtdUCs}
+                          onChange={(e) =>
+                            setTorre(bi, { qtdUCs: e.target.value })
+                          }
+                          placeholder="Ex: 48"
+                        />
+                      </Field>
+                      <Field label="Disjuntor do Condomínio / Sist. Combate Incêndio">
+                        <Sel
+                          value={b.disjIncendio}
+                          onChange={(e) =>
+                            setTorre(bi, { disjIncendio: e.target.value })
+                          }
+                        >
+                          <option value="">Selecione…</option>
+                          {DISJ.map((d) => (
+                            <option key={d.fx} value={d.fx}>
+                              {d.fx}
+                            </option>
+                          ))}
+                        </Sel>
+                      </Field>
+                      <Field label="Demanda Condomínio / Combate Incêndio (kVA)">
+                        <Inp
+                          type="number"
+                          value={b.demandaIncendio}
+                          onChange={(e) =>
+                            setTorre(bi, { demandaIncendio: e.target.value })
+                          }
+                          placeholder="Ex: 15"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+
+                {demandaTotalGeral > 304 && (
+                  <div className="alert alert-info" style={{ marginTop: 10 }}>
+                    Demanda total acima de 304 kVA: o atendimento fica
+                    condicionado à apresentação do projeto elétrico com ART/TRT.
+                  </div>
+                )}
+              </Card>
+            </div>
           )}
 
-          {/* ===== UNIDADES CONSUMIDORAS ===== */}
-          {aba === "ucs" && coletivo && (
+          {/* ===== UNIDADES CONSUMIDORAS — COLETIVO (identificação) ===== */}
+          {aba === "ucs" && coletivo && !multiTorres && (
             <div>
               <Card
                 eyebrow="Identificação"
                 title={`Unidades Consumidoras (${ucBlocos.length})`}
-                sub="Preencha os dados de identificação de cada UC. O número de blocos segue o Nº de Unidades Consumidoras informado no Tipo de Atendimento. Campos com valor padrão já vêm preenchidos."
+                sub="Preencha os dados de identificação de cada UC. Campos com valor padrão já vêm preenchidos. Em Conexão Nova não há disjuntor 'De' (a instalação ainda não existe)."
               >
                 {ucBlocos.map((u, ui) => (
                   <div key={ui} className="uc-block">
@@ -1672,38 +1927,40 @@ function App() {
                             setBloco(ui, { ramo: e.target.value })
                           }
                           placeholder={
-                            u.atividade === "Residencial"
-                              ? "—"
-                              : "Obrigatório se não residencial"
+                            u.atividade === "Residencial" ? "—" : "Obrigatório"
                           }
                         />
                       </Field>
-                      <Field label="Instalação">
-                        <Inp
-                          value={u.instalacao}
-                          onChange={(e) =>
-                            setBloco(ui, { instalacao: e.target.value })
-                          }
-                          placeholder="Nº instalação (se existente)"
-                        />
-                      </Field>
+                      {u.solicitacao !== "Conexão Nova" && (
+                        <Field label="Instalação" req>
+                          <Inp
+                            value={u.instalacao}
+                            onChange={(e) =>
+                              setBloco(ui, { instalacao: e.target.value })
+                            }
+                            placeholder="Nº instalação existente"
+                          />
+                        </Field>
+                      )}
                       <Field label="Disjuntor" span={3}>
                         <div className="disj-pair">
-                          <div>
-                            <Sel
-                              value={u.disjDe}
-                              onChange={(e) =>
-                                setBloco(ui, { disjDe: e.target.value })
-                              }
-                            >
-                              <option value="">De: (atual)…</option>
-                              {DISJ.map((d) => (
-                                <option key={d.fx} value={d.fx}>
-                                  {d.fx}
-                                </option>
-                              ))}
-                            </Sel>
-                          </div>
+                          {u.solicitacao !== "Conexão Nova" && (
+                            <div>
+                              <Sel
+                                value={u.disjDe}
+                                onChange={(e) =>
+                                  setBloco(ui, { disjDe: e.target.value })
+                                }
+                              >
+                                <option value="">De: (atual)…</option>
+                                {DISJ.map((d) => (
+                                  <option key={d.fx} value={d.fx}>
+                                    {d.fx}
+                                  </option>
+                                ))}
+                              </Sel>
+                            </div>
+                          )}
                           <div>
                             <Sel
                               value={u.disjPara}
@@ -1711,7 +1968,11 @@ function App() {
                                 setBloco(ui, { disjPara: e.target.value })
                               }
                             >
-                              <option value="">Para: (solicitado)…</option>
+                              <option value="">
+                                {u.solicitacao === "Conexão Nova"
+                                  ? "Disjuntor solicitado…"
+                                  : "Para: (solicitado)…"}
+                              </option>
                               {DISJ.map((d) => (
                                 <option key={d.fx} value={d.fx}>
                                   {d.fx}
@@ -1730,7 +1991,7 @@ function App() {
                 <Card
                   eyebrow="Proteção geral"
                   title="Disjuntor Geral do Agrupamento"
-                  sub={`Obrigatório quando há UC bi/trifásica com proteção acima de 60/63 A. Faixas disponíveis: acima de ${maiorCorrenteUC || "—"} A (maior disjuntor das UCs).`}
+                  sub={`Obrigatório quando há UC bi/trifásica com proteção acima de 60/63 A. Faixas disponíveis: acima de ${maiorCorrenteUC || "—"} A.`}
                 >
                   <div className="geral-box" style={{ marginTop: 0 }}>
                     <Field label="Disjuntor geral" req>
@@ -1773,122 +2034,294 @@ function App() {
             </div>
           )}
 
+          {/* ===== UNIDADES CONSUMIDORAS — INDIVIDUAL (identificação de cada UC) ===== */}
           {aba === "ucs" && !coletivo && (
-            <Card
-              eyebrow="Identificação"
-              title="Unidade Consumidora"
-              sub="Dados de identificação da unidade consumidora (atendimento individual)."
-            >
-              <div className="grid grid-3">
-                <Field label="Tipo de solicitação" req>
-                  <Sel
-                    value={ucDet.solicitacao}
-                    onChange={(e) =>
-                      setUcDet({ ...ucDet, solicitacao: e.target.value })
-                    }
-                  >
-                    <option>Conexão Nova</option>
-                    <option>Alteração de Carga</option>
-                    <option>Caixa Existente sem Alteração</option>
-                  </Sel>
-                </Field>
-                <Field label="Atividade principal" req>
-                  <Sel
-                    value={ucDet.atividade}
-                    onChange={(e) =>
-                      setUcDet({ ...ucDet, atividade: e.target.value })
-                    }
-                  >
-                    <option>Residencial</option>
-                    <option>Comercial</option>
-                    <option>Industrial</option>
-                    <option>Rural</option>
-                  </Sel>
-                </Field>
-                <Field
-                  label="Ramo de atividade"
-                  req={ucDet.atividade !== "Residencial"}
+            <div>
+              <Card
+                eyebrow="Identificação"
+                title={`Unidades Consumidoras (${ucsDet.length})`}
+                sub="Dados de identificação de cada unidade consumidora. O detalhamento das cargas é feito na próxima etapa. Em Conexão Nova não há disjuntor 'De' nem instalação."
+              >
+                {ucsDet.map((u, ui) => (
+                  <div key={ui} className="uc-block">
+                    <div className="uc-block-head">
+                      <span className="uc-block-title">UC {ui + 1}</span>
+                      <Badge>
+                        {ui + 1} de {ucsDet.length}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-3">
+                      <Field label="Tipo de solicitação" req>
+                        <Sel
+                          value={u.solicitacao}
+                          onChange={(e) =>
+                            setUcDet(ui, { solicitacao: e.target.value })
+                          }
+                        >
+                          <option>Conexão Nova</option>
+                          <option>Alteração de Carga</option>
+                          <option>Caixa Existente sem Alteração</option>
+                        </Sel>
+                      </Field>
+                      <Field label="Atividade principal" req>
+                        <Sel
+                          value={u.atividade}
+                          onChange={(e) =>
+                            setUcDet(ui, { atividade: e.target.value })
+                          }
+                        >
+                          <option>Residencial</option>
+                          <option>Comercial</option>
+                          <option>Industrial</option>
+                          <option>Rural</option>
+                        </Sel>
+                      </Field>
+                      <Field
+                        label="Ramo de atividade"
+                        req={u.atividade !== "Residencial"}
+                      >
+                        <Inp
+                          value={u.ramo}
+                          onChange={(e) =>
+                            setUcDet(ui, { ramo: e.target.value })
+                          }
+                          placeholder={
+                            u.atividade === "Residencial" ? "—" : "Obrigatório"
+                          }
+                        />
+                      </Field>
+                      <Field label="Nº Predial" req>
+                        <Inp
+                          value={u.nPredial}
+                          onChange={(e) =>
+                            setUcDet(ui, { nPredial: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Complemento" req={ucsDet.length > 1}>
+                        <Inp
+                          value={u.complemento}
+                          onChange={(e) =>
+                            setUcDet(ui, { complemento: e.target.value })
+                          }
+                          placeholder="Ex: Casa 1"
+                        />
+                      </Field>
+                      <Field label="Caixa / Identificação">
+                        <Inp
+                          value={u.caixa}
+                          onChange={(e) =>
+                            setUcDet(ui, { caixa: e.target.value })
+                          }
+                        />
+                      </Field>
+                      {u.solicitacao !== "Conexão Nova" && (
+                        <React.Fragment>
+                          <Field label="Nº Instalação / Medidor" req>
+                            <Inp
+                              value={u.instalacao}
+                              onChange={(e) =>
+                                setUcDet(ui, { instalacao: e.target.value })
+                              }
+                            />
+                          </Field>
+                          <Field label="Mudança de local">
+                            <Toggle
+                              value={u.mudancaLocal}
+                              onChange={(v) =>
+                                setUcDet(ui, { mudancaLocal: v })
+                              }
+                              options={[
+                                { v: "Sim", l: "Sim" },
+                                { v: "Não", l: "Não" },
+                              ]}
+                            />
+                          </Field>
+                          <Field label="Disjuntor De (atual)">
+                            <Sel
+                              value={u.disjDe}
+                              onChange={(e) =>
+                                setUcDet(ui, { disjDe: e.target.value })
+                              }
+                            >
+                              <option value="">Selecione…</option>
+                              {DISJ.map((d) => (
+                                <option key={d.fx} value={d.fx}>
+                                  {d.fx}
+                                </option>
+                              ))}
+                            </Sel>
+                          </Field>
+                        </React.Fragment>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </Card>
+              {ucsDet.length > 1 && (
+                <div
+                  className={
+                    "alert " +
+                    (validacaoDisjuntores.ok ? "alert-ok" : "alert-warn")
+                  }
                 >
+                  <b>
+                    Regra de disjuntores (múltiplas UCs sem proteção geral):
+                  </b>{" "}
+                  no máximo 1 tripolar de 63 A e/ou até 2 mono/bifásicos de 63
+                  A. {validacaoDisjuntores.ok ? "✔ " : "⚠ "}
+                  {validacaoDisjuntores.msg}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== CARGAS — COLETIVO: previsão digitada ===== */}
+          {aba === "cargas" && coletivo && !multiTorres && (
+            <Card
+              eyebrow="Carga do agrupamento"
+              title="Previsão de Carga"
+              sub="Informe a previsão de carga instalada por grupo (kW) e a demanda total prevista (kVA). Valores digitados — sem detalhamento por equipamento."
+            >
+              <div className="prev-carga">
+                <Field label="Iluminação (kW)">
                   <Inp
-                    value={ucDet.ramo}
-                    onChange={(e) =>
-                      setUcDet({ ...ucDet, ramo: e.target.value })
-                    }
-                    placeholder={
-                      ucDet.atividade === "Residencial" ? "—" : "Obrigatório"
-                    }
+                    type="number"
+                    value={prev.ilum}
+                    onChange={(e) => setPrev({ ...prev, ilum: e.target.value })}
+                    placeholder="0,0"
                   />
                 </Field>
-                {ucDet.solicitacao === "Conexão Nova" ? (
-                  <React.Fragment>
-                    <Field label="Nº Predial" req>
-                      <Inp
-                        value={ucDet.nPredial}
-                        onChange={(e) =>
-                          setUcDet({ ...ucDet, nPredial: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field label="Complemento">
-                      <Inp
-                        value={ucDet.complemento}
-                        onChange={(e) =>
-                          setUcDet({ ...ucDet, complemento: e.target.value })
-                        }
-                        placeholder="Ex: Casa 1"
-                      />
-                    </Field>
-                    <Field label="Caixa / Identificação">
-                      <Inp
-                        value={ucDet.caixa}
-                        onChange={(e) =>
-                          setUcDet({ ...ucDet, caixa: e.target.value })
-                        }
-                      />
-                    </Field>
-                  </React.Fragment>
-                ) : (
-                  <React.Fragment>
-                    <Field label="Nº Instalação / Medidor" req>
-                      <Inp
-                        value={ucDet.instalacao}
-                        onChange={(e) =>
-                          setUcDet({ ...ucDet, instalacao: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field label="Disjuntor De">
-                      <Inp
-                        value={ucDet.disjDe}
-                        onChange={(e) =>
-                          setUcDet({ ...ucDet, disjDe: e.target.value })
-                        }
-                        placeholder="Ex: 1x40"
-                      />
-                    </Field>
-                    <Field label="Disjuntor Para">
-                      <Inp
-                        value={ucDet.disjPara}
-                        onChange={(e) =>
-                          setUcDet({ ...ucDet, disjPara: e.target.value })
-                        }
-                        placeholder="Ex: 3x63"
-                      />
-                    </Field>
-                  </React.Fragment>
-                )}
+                <Field label="Tomada (kW)">
+                  <Inp
+                    type="number"
+                    value={prev.tomada}
+                    onChange={(e) =>
+                      setPrev({ ...prev, tomada: e.target.value })
+                    }
+                    placeholder="0,0"
+                  />
+                </Field>
+                <Field label="Chuveiro (kW)">
+                  <Inp
+                    type="number"
+                    value={prev.chuveiro}
+                    onChange={(e) =>
+                      setPrev({ ...prev, chuveiro: e.target.value })
+                    }
+                    placeholder="0,0"
+                  />
+                </Field>
+                <Field label="Ar Cond. (kW)">
+                  <Inp
+                    type="number"
+                    value={prev.ar}
+                    onChange={(e) => setPrev({ ...prev, ar: e.target.value })}
+                    placeholder="0,0"
+                  />
+                </Field>
+                <Field label="Outros (kW)">
+                  <Inp
+                    type="number"
+                    value={prev.outros}
+                    onChange={(e) =>
+                      setPrev({ ...prev, outros: e.target.value })
+                    }
+                    placeholder="0,0"
+                  />
+                </Field>
               </div>
-              <div className="alert alert-ok" style={{ marginTop: 14 }}>
-                O detalhamento das cargas desta unidade é feito na etapa{" "}
-                <b>Cargas da UC</b>. Demanda atual:{" "}
-                <b>{fmt2(ucDet.cargas?._demanda || 0)} kVA</b> · Disjuntor:{" "}
-                <b>
-                  {ucDet.disjEscolhido ||
-                    (ucDet.cargas?._disjuntores || [])[0] ||
-                    "—"}
-                </b>
+              <div style={{ marginTop: 12 }}>
+                <Field label="Descrição (Outros)">
+                  <Inp
+                    value={prev.outrosDesc}
+                    onChange={(e) =>
+                      setPrev({ ...prev, outrosDesc: e.target.value })
+                    }
+                    placeholder="Outros itens nas UCs"
+                  />
+                </Field>
               </div>
+              <div className="prev-total">
+                <div className="kpi">
+                  <div className="kpi-label">Total Carga Instalada</div>
+                  <div className="kpi-value">{fmt2(prevTotalKw)} kW</div>
+                </div>
+                <div className="kpi" style={{ flex: 1.4 }}>
+                  <div className="kpi-label">Demanda prevista (kVA) *</div>
+                  <Inp
+                    type="number"
+                    value={prev.demanda}
+                    onChange={(e) =>
+                      setPrev({ ...prev, demanda: e.target.value })
+                    }
+                    placeholder="0,0"
+                  />
+                </div>
+                <div className="kpi dark">
+                  <div className="kpi-label">Demanda do atendimento</div>
+                  <div className="kpi-value" style={{ fontSize: 18 }}>
+                    {fmt2(demandaTotalGeral)} kVA
+                  </div>
+                </div>
+              </div>
+              {demandaTotalGeral > 304 && (
+                <div className="alert alert-info" style={{ marginTop: 14 }}>
+                  Demanda total acima de 304 kVA: o atendimento fica
+                  condicionado à apresentação do projeto elétrico com ART/TRT.
+                </div>
+              )}
             </Card>
+          )}
+
+          {/* ===== CARGAS — INDIVIDUAL: calculadora POR UC ===== */}
+          {aba === "cargas" && !coletivo && (
+            <div>
+              {ucsDet.length > 1 && (
+                <div
+                  className={
+                    "alert " +
+                    (validacaoDisjuntores.ok ? "alert-ok" : "alert-warn")
+                  }
+                >
+                  <b>Regra de disjuntores:</b> máx. 1 tripolar 63 A e/ou 2
+                  mono/bifásicos 63 A. {validacaoDisjuntores.ok ? "✔ " : "⚠ "}
+                  {validacaoDisjuntores.msg}
+                </div>
+              )}
+              {ucsDet.map((u, ui) => (
+                <Card
+                  key={ui}
+                  eyebrow={`UC ${ui + 1} de ${ucsDet.length}`}
+                  title={`Cargas da Unidade Consumidora ${ui + 1}`}
+                  sub="Detalhe os equipamentos. A demanda e o disjuntor são calculados automaticamente (ND-5.1)."
+                >
+                  <CalcDemanda
+                    data={u.cargas}
+                    onChange={(c) => setUcDet(ui, { cargas: c })}
+                    redeMono={redeMono}
+                  />
+                  {u.cargas?._disjuntores?.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <Field label={`Disjuntor escolhido para a UC ${ui + 1}`}>
+                        <Sel
+                          value={u.disjEscolhido || u.cargas._disjuntores[0]}
+                          onChange={(e) =>
+                            setUcDet(ui, { disjEscolhido: e.target.value })
+                          }
+                        >
+                          {u.cargas._disjuntores.map((dj) => (
+                            <option key={dj} value={dj}>
+                              {dj}
+                            </option>
+                          ))}
+                        </Sel>
+                      </Field>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
           )}
 
           {/* ===== GERADOR (individual) ===== */}
@@ -1975,7 +2408,7 @@ function App() {
               <Card
                 eyebrow="Etapa final"
                 title="Prévia do Formulário"
-                sub="Confira os dados. Se algo estiver incorreto, volte às etapas anteriores pela barra lateral. Quando estiver tudo certo, exporte o PDF."
+                sub="Confira os dados. Se algo estiver incorreto, volte às etapas anteriores pela barra lateral."
               >
                 <div className="kpi-row">
                   <div className="kpi">
@@ -1987,7 +2420,11 @@ function App() {
                   <div className="kpi">
                     <div className="kpi-label">Unidades Consumidoras</div>
                     <div className="kpi-value">
-                      {coletivo ? ucBlocos.length : 1}
+                      {multiTorres
+                        ? totalUcsEmpreendimento
+                        : coletivo
+                          ? ucBlocos.length
+                          : ucsDet.length}
                     </div>
                   </div>
                   <div className="kpi dark">
@@ -2001,10 +2438,15 @@ function App() {
                   <h4>Modalidade</h4>
                   <div className="preview-item">
                     <span className="v">
+                      {multiTorres
+                        ? `Múltiplas Torres/Blocos · ${blocos.length} ${atend.atendA.toLowerCase()}(s)`
+                        : coletivo
+                          ? "Coletivo — Agrupamento com Proteção Geral (APR Web)"
+                          : "Individual / até 3 caixas sem proteção geral"}
                       {coletivo
-                        ? "Coletivo — Agrupamento com Proteção Geral (APR Web)"
-                        : "Individual / até 3 caixas sem proteção geral"}
-                      {atend.disjuntorGeral
+                        ? ` · ${atend.solicitacao} · ${atend.escopo}`
+                        : ""}
+                      {!multiTorres && atend.disjuntorGeral
                         ? ` · Disjuntor geral: ${atend.disjuntorGeral}`
                         : ""}
                     </span>
@@ -2035,7 +2477,33 @@ function App() {
                     </div>
                   </div>
                 </div>
-                {coletivo ? (
+                {multiTorres ? (
+                  <div className="preview-block">
+                    <h4>Torres / Blocos</h4>
+                    {blocos.map((b, bi) => (
+                      <div
+                        key={bi}
+                        className="preview-item"
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span className="v">
+                          {atend.atendA} {b.nome || bi + 1} · {b.qtdUCs || 0}{" "}
+                          UCs · Geral: {b.disjGeral || "—"} · Incêndio:{" "}
+                          {b.disjIncendio || "—"}
+                        </span>
+                        <span
+                          style={{ color: "var(--verde)", fontWeight: 700 }}
+                        >
+                          {fmt2(num(b.demandaBloco) + num(b.demandaIncendio))}{" "}
+                          kVA
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : coletivo ? (
                   <div className="preview-block">
                     <h4>Previsão de carga e UCs</h4>
                     <div className="preview-item">
@@ -2068,25 +2536,30 @@ function App() {
                   </div>
                 ) : (
                   <div className="preview-block">
-                    <h4>Unidade Consumidora</h4>
-                    <div
-                      className="preview-item"
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <span className="v">
-                        {ucDet.atividade} · {ucDet.solicitacao}{" "}
-                        {ucDet.complemento ? `· ${ucDet.complemento}` : ""}
-                      </span>
-                      <span style={{ color: "var(--verde)", fontWeight: 700 }}>
-                        {fmt2(ucDet.cargas?._demanda || 0)} kVA ·{" "}
-                        {ucDet.disjEscolhido ||
-                          (ucDet.cargas?._disjuntores || [])[0] ||
-                          "—"}
-                      </span>
-                    </div>
+                    <h4>Unidades Consumidoras</h4>
+                    {ucsDet.map((u, ui) => (
+                      <div
+                        key={ui}
+                        className="preview-item"
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span className="v">
+                          UC {ui + 1} · {u.atividade} · {u.solicitacao}{" "}
+                          {u.complemento ? `· ${u.complemento}` : ""}
+                        </span>
+                        <span
+                          style={{ color: "var(--verde)", fontWeight: 700 }}
+                        >
+                          {fmt2(u.cargas?._demanda || 0)} kVA ·{" "}
+                          {u.disjEscolhido ||
+                            (u.cargas?._disjuntores || [])[0] ||
+                            "—"}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </Card>
@@ -2100,11 +2573,11 @@ function App() {
 
           {/* ===== NAVEGAÇÃO ===== */}
           <div className="nav-bottom">
-            <Btn variant="ghost" onClick={irAnt} disabled={idx === 0}>
+            <Btn variant="ghost" onClick={irAnt} disabled={idx <= 0}>
               ← Voltar
             </Btn>
             <span className="nav-step-info">
-              Etapa {idx + 1} de {abas.length}
+              Etapa {Math.max(idx, 0) + 1} de {abas.length}
             </span>
             {aba === "revisar" ? (
               <Btn variant="primary" onClick={gerarPDF}>
