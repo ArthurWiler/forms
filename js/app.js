@@ -1096,11 +1096,7 @@ function App() {
               </div>
 
               <div className="grid grid-2">
-                <Field
-                  label="Possui disjuntor geral (proteção geral)?"
-                  req
-                  hint="Sim = atendimento coletivo. Não = individual com detalhamento de cargas por UC."
-                >
+                <Field label="Possui disjuntor geral (proteção geral)?" req>
                   <Toggle
                     value={atend.disjGeral}
                     onChange={(v) => setAtend({ ...atend, disjGeral: v })}
@@ -1195,10 +1191,10 @@ function App() {
                 style={{ marginTop: 16 }}
               >
                 {multiTorres
-                  ? "MÚLTIPLAS TORRES/BLOCOS: cada bloco terá disjuntor geral, demanda, quantidade de UCs e disjuntor de combate a incêndio — com preenchimento em massa."
+                  ? "Atendimento caracterizado como empreendimento com 'Múltiplas Torres ou Blocos'."
                   : coletivo
-                    ? "Atendimento COLETIVO: identificação das UCs e previsão de carga geral."
-                    : "Atendimento INDIVIDUAL: identificação e detalhamento da carga de cada unidade consumidora."}
+                    ? "Atendimento caracterizado como 'Coletivo'."
+                    : "Atendimento caracterizado como 'Individual'."}
               </div>
             </Card>
           )}
