@@ -74,7 +74,7 @@ function correnteDisj(fx) {
 // Lista de disjuntores GERAIS com faixa estritamente MAIOR que a maior UC.
 // Considera apenas tripolares (proteção geral de agrupamento é trifásica).
 function disjuntoresGeraisAcima(maiorCorrenteUC) {
-  return DISJ.filter(
+  return DISJ_GER.filter(
     (d) => d.tipo === "tri" && correnteDisj(d.fx) > maiorCorrenteUC,
   ).map((d) => d.fx);
 }

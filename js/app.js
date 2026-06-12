@@ -149,8 +149,7 @@ function App() {
     nBlocos: 1,
   });
   const coletivo = atend.disjGeral === "Sim";
-  const multiTorres = coletivo && atend.solicitacao === SOLICITACOES[3];
-  const acima75 = atend.acima75;
+  const multiTorres = coletivo && atend.solicitacao === SOLICITACOES[4];
 
   // ---- Dados compartilhados ----
   const [prop, setProp] = useState({
@@ -1795,7 +1794,7 @@ function App() {
                           }
                         >
                           <option value="">Selecione…</option>
-                          {DISJ.filter((d) => d.tipo === "tri").map((d) => (
+                          {DISJ_GER.filter((d) => d.tipo === "tri").map((d) => (
                             <option key={d.fx} value={d.fx}>
                               {d.fx}
                             </option>
@@ -1830,7 +1829,7 @@ function App() {
                           }
                         >
                           <option value="">Selecione…</option>
-                          {DISJ.map((d) => (
+                          {DISJ_CN.map((d) => (
                             <option key={d.fx} value={d.fx}>
                               {d.fx}
                             </option>
@@ -2005,7 +2004,7 @@ function App() {
                                   ? "Disjuntor solicitado…"
                                   : "Para: (solicitado)…"}
                               </option>
-                              {DISJ.map((d) => (
+                              {DISJ_CN.map((d) => (
                                 <option key={d.fx} value={d.fx}>
                                   {d.fx}
                                 </option>
