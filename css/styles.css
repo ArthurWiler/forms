@@ -50,7 +50,7 @@ body {
   z-index: 100;
 }
 .topbar-inner {
-  max-width: 1360px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 12px 20px;
   display: flex;
@@ -64,8 +64,8 @@ body {
   gap: 10px;
   text-decoration: none;
 }
-.logo-cemig svg { height: 28px; width: auto; }
-.logo-cemig .logo-img { height: 28px; width: auto; display: block; }
+.logo-cemig svg { height: 34px; width: auto; }
+.logo-cemig .logo-img { height: 34px; width: auto; display: block; }
 .topbar-links { display: flex; gap: 8px; flex-wrap: wrap; }
 .topbar-links a {
   font-size: 12px;
@@ -82,7 +82,7 @@ body {
 
 /* ---------- CABEÇALHO DO FORMULÁRIO ---------- */
 .form-header {
-  max-width: 1360px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 28px 20px 8px;
 }
@@ -96,7 +96,7 @@ body {
   margin-top: 6px;
   font-size: 14px;
   color: var(--texto-suave);
-  max-width: 1360px;
+  max-width: 760px;
 }
 .flow-badge {
   display: inline-flex;
@@ -113,7 +113,7 @@ body {
 
 /* ---------- LAYOUT DUAS COLUNAS (sidebar vertical) ---------- */
 .layout {
-  max-width: 1360px;
+  max-width: 1180px;
   margin: 0 auto;
   display: flex;
   gap: 0;
@@ -580,4 +580,64 @@ input[type="number"] { -moz-appearance: textfield; }
   border-radius: var(--raio-sm);
   padding: 14px;
   margin-top: 14px;
+}
+/* ---------- DEMANDA PREVISTA (kVA) — campo destacado ---------- */
+.kpi.kpi-demanda {
+  background: var(--verde-claro);
+  border: 1.5px solid var(--verde);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+.kpi.kpi-demanda .kpi-label {
+  color: var(--verde-escuro);
+  font-weight: 700;
+}
+.kpi.kpi-demanda input {
+  width: 100%;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--verde-escuro);
+  background: #fff;
+  border: 1px solid var(--verde);
+  border-radius: var(--raio-sm);
+  padding: 8px 10px;
+  text-align: right;
+}
+.kpi.kpi-demanda input:focus {
+  outline: none;
+  border-color: var(--verde-escuro);
+  box-shadow: 0 0 0 3px rgba(1, 136, 55, 0.15);
+}
+
+/* ---------- UCs por TORRE/BLOCO (múltiplas torres) ---------- */
+.uc-torre-wrap {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--borda);
+}
+.uc-mini {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-sm);
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+.uc-mini-head {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--verde-escuro);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.uc-mini-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--verde-acento);
+  background: var(--verde-claro);
+  border-radius: 999px;
+  padding: 2px 8px;
 }

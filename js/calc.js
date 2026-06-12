@@ -55,7 +55,7 @@ function selecionarDisjuntores(demanda, redeMono) {
   const result = [];
   for (const tp of tipos) {
     if (!redeMono && tp === "bi" && demanda > 16) continue;
-    const cand = DISJ.filter((dj) => dj.tipo === tp && dj.d >= demanda);
+    const cand = DISJ_CN.filter((dj) => dj.tipo === tp && dj.d >= demanda);
     if (cand.length > 0) {
       cand.sort((a, b) => a.d - b.d);
       result.push(cand[0]);
@@ -78,3 +78,136 @@ function disjuntoresGeraisAcima(maiorCorrenteUC) {
     (d) => d.tipo === "tri" && correnteDisj(d.fx) > maiorCorrenteUC,
   ).map((d) => d.fx);
 }
+
+/* ============================================================
+   MÁSCARAS E VALIDAÇÃO (documentos / contatos / CEP)
+   ============================================================ */
+
+// Remove tudo que não for dígito
+const soDigitos = (v) => String(v || "").replace(/\D/g, "");
+
+// Detecta se o conteúdo digitado é CNPJ (mais de 11 dígitos) ou CPF
+function ehCNPJ(v) {
+  return soDigitos(v).length > 11;
+}
+
+// Máscara CPF: 000.000.000-00
+function mascararCPF(v) {
+  const d = soDigitos(v).slice(0, 11);
+  let r = d;
+  if (d.length > 9)
+    r = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  else if (d.length > 6) r = `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  else if (d.length > 3) r = `${d.slice(0, 3)}.${d.slice(3)}`;
+  return r;
+}
+
+// Máscara CNPJ: 00.000.000/0000-00
+function mascararCNPJ(v) {
+  const d = soDigitos(v).slice(0, 14);
+  let r = d;
+  if (d.length > 12)
+    r = `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  else if (d.length > 8)
+    r = `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  else if (d.length > 5) r = `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  else if (d.length > 2) r = `${d.slice(0, 2)}.${d.slice(2)}`;
+  return r;
+}
+
+// Máscara automática CPF/CNPJ — escolhe pelo nº de dígitos
+function mascararCpfCnpj(v) {
+  return ehCNPJ(v) ? mascararCNPJ(v) : mascararCPF(v);
+}
+
+// Máscara CEP: 00000-000
+function mascararCEP(v) {
+  const d = soDigitos(v).slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
+// Máscara celular: (00) 00000-0000
+function mascararCelular(v) {
+  const d = soDigitos(v).slice(0, 11);
+  if (d.length > 7) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length > 2) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length > 0) return `(${d.slice(0)}`;
+  return d;
+}
+
+// Máscara telefone fixo: (00) 0000-0000
+function mascararFixo(v) {
+  const d = soDigitos(v).slice(0, 10);
+  if (d.length > 6) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  if (d.length > 2) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length > 0) return `(${d.slice(0)}`;
+  return d;
+}
+
+// Máscara telefone genérica — fixo ou celular conforme nº de dígitos
+function mascararTelefone(v) {
+  return soDigitos(v).length > 10 ? mascararCelular(v) : mascararFixo(v);
+}
+
+// Máscara RG/RNE/RANI: até 9 caracteres alfanuméricos, agrupados 00.000.000-0
+function mascararRG(v) {
+  const limpo = String(v || "")
+    .replace(/[^0-9A-Za-z]/g, "")
+    .toUpperCase()
+    .slice(0, 9);
+  const d = limpo;
+  if (d.length > 8)
+    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}-${d.slice(8)}`;
+  if (d.length > 5) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  if (d.length > 2) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  return d;
+}
+
+// Validação de CPF (dígitos verificadores)
+function cpfValido(v) {
+  const d = soDigitos(v);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  let s = 0;
+  for (let i = 0; i < 9; i++) s += parseInt(d[i]) * (10 - i);
+  let r = (s * 10) % 11;
+  if (r === 10) r = 0;
+  if (r !== parseInt(d[9])) return false;
+  s = 0;
+  for (let i = 0; i < 10; i++) s += parseInt(d[i]) * (11 - i);
+  r = (s * 10) % 11;
+  if (r === 10) r = 0;
+  return r === parseInt(d[10]);
+}
+
+// Validação de CNPJ (dígitos verificadores)
+function cnpjValido(v) {
+  const d = soDigitos(v);
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const calc = (base) => {
+    const pesos =
+      base.length === 12
+        ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let s = 0;
+    for (let i = 0; i < base.length; i++) s += parseInt(base[i]) * pesos[i];
+    const r = s % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  const dv1 = calc(d.slice(0, 12));
+  const dv2 = calc(d.slice(0, 12) + dv1);
+  return dv1 === parseInt(d[12]) && dv2 === parseInt(d[13]);
+}
+
+// Validação combinada CPF/CNPJ — retorna {tipo, valido}
+function validarCpfCnpj(v) {
+  if (!v) return { tipo: "", valido: null };
+  if (ehCNPJ(v)) {
+    const completo = soDigitos(v).length === 14;
+    return { tipo: "CNPJ", valido: completo ? cnpjValido(v) : null };
+  }
+  const completo = soDigitos(v).length === 11;
+  return { tipo: "CPF", valido: completo ? cpfValido(v) : null };
+}
+
+// Dias permitidos para vencimento da conta (CEMIG)
+const DIAS_VENCIMENTO = ["01", "06", "11", "17", "22", "27"];

@@ -119,6 +119,19 @@ const ucDetalhadaPadrao = () => ({
   cargas: { qtds: CAT.map(() => 0), tipoA: "res", catA: 0, mots: [] },
 });
 
+// UC de torre/bloco (modo múltiplas torres) — identificação por unidade
+const ucTorrePadrao = (i) => ({
+  identificacao: `UC ${i + 1}`,
+  nPredial: "",
+  complemento: "",
+  caixa: "",
+  solicitacao: "Conexão Nova",
+  atividade: "Residencial",
+  ramo: "",
+  instalacao: "",
+  disjPara: "Bipolar 63 A",
+});
+
 // Torre/Bloco (modo múltiplas torres) — preenchimento em massa
 const blocoPadrao = (i) => ({
   nome: `${i + 1}`,
@@ -127,6 +140,7 @@ const blocoPadrao = (i) => ({
   qtdUCs: "",
   disjIncendio: "Bipolar 63 A",
   demandaIncendio: "",
+  ucs: [ucTorrePadrao(0)],
 });
 
 // ============================================================
@@ -209,6 +223,11 @@ function App() {
   });
   const [obs, setObs] = useState("");
   const [cepStatus, setCepStatus] = useState({ obra: "", corr: "" });
+  const [cnpjStatus, setCnpjStatus] = useState("");
+
+  // Pessoa física? (depende do documento digitado em CPF/CNPJ)
+  const docInfo = useMemo(() => validarCpfCnpj(prop.cpfCnpj), [prop.cpfCnpj]);
+  const pessoaFisica = docInfo.tipo !== "CNPJ"; // CPF ou vazio => trata como PF
 
   // ---- Previsão de carga (coletivo comum) ----
   const [prev, setPrev] = useState({
@@ -239,6 +258,24 @@ function App() {
   const [ucBlocos, setUcBlocos] = useState([ucBlocoPadrao(0)]);
   const setBloco = (i, patch) =>
     setUcBlocos((p) => p.map((u, idx) => (idx === i ? { ...u, ...patch } : u)));
+  // Preenchimento em massa: replica a UC 1 para as demais (mantém identificação/complemento/instalação individuais)
+  const replicarUC1Coletivo = () =>
+    setUcBlocos((p) => {
+      const base = p[0];
+      if (!base) return p;
+      return p.map((u, k) =>
+        k === 0
+          ? u
+          : {
+              ...base,
+              identificacao: u.identificacao || `UC ${k + 1}`,
+              nPredial: u.nPredial,
+              complemento: u.complemento,
+              caixa: u.caixa,
+              instalacao: u.instalacao,
+            },
+      );
+    });
 
   // ---- Torres/Blocos (múltiplas torres) ----
   const [blocos, setBlocos] = useState([blocoPadrao(0)]);
@@ -246,7 +283,66 @@ function App() {
     setBlocos((p) => p.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
   const replicarPrimeiro = () =>
     setBlocos((p) =>
-      p.map((b, i) => (i === 0 ? b : { ...p[0], nome: `${i + 1}` })),
+      p.map((b, i) =>
+        i === 0
+          ? b
+          : {
+              ...p[0],
+              nome: `${i + 1}`,
+              ucs: (p[0].ucs || []).map((u, k) => ({ ...u })),
+            },
+      ),
+    );
+
+  // Sincroniza a lista de UCs de uma torre conforme a quantidade informada
+  const sincronizarUCsTorre = (i, qtd) => {
+    const n = Math.max(1, parseInt(qtd) || 1);
+    setBlocos((p) =>
+      p.map((b, idx) => {
+        if (idx !== i) return b;
+        const arr = [...(b.ucs || [])];
+        while (arr.length < n) arr.push(ucTorrePadrao(arr.length));
+        while (arr.length > n) arr.pop();
+        return { ...b, qtdUCs: qtd, ucs: arr };
+      }),
+    );
+  };
+
+  // Atualiza uma UC específica dentro de uma torre
+  const setUcTorre = (bi, ui, patch) =>
+    setBlocos((p) =>
+      p.map((b, idx) =>
+        idx === bi
+          ? {
+              ...b,
+              ucs: (b.ucs || []).map((u, k) =>
+                k === ui ? { ...u, ...patch } : u,
+              ),
+            }
+          : b,
+      ),
+    );
+
+  // Preenchimento em massa: replica a UC 1 de uma torre para as demais UCs da mesma torre
+  const replicarUC1Torre = (bi) =>
+    setBlocos((p) =>
+      p.map((b, idx) => {
+        if (idx !== bi) return b;
+        const base = (b.ucs || [])[0];
+        if (!base) return b;
+        return {
+          ...b,
+          ucs: b.ucs.map((u, k) =>
+            k === 0
+              ? u
+              : {
+                  ...base,
+                  identificacao: `UC ${k + 1}`,
+                  instalacao: u.instalacao,
+                },
+          ),
+        };
+      }),
     );
 
   // Sincroniza nº de UCs (individual: máx 3; coletivo: blocos de identificação)
@@ -329,6 +425,48 @@ function App() {
       setCepStatus((p) => ({ ...p, [alvo]: "ok" }));
     } catch (e) {
       setCepStatus((p) => ({ ...p, [alvo]: "erro" }));
+    }
+  };
+
+  // ===== API DE CNPJ (BrasilAPI) =====
+  const buscarCNPJ = async (doc) => {
+    const limpo = soDigitos(doc);
+    if (limpo.length !== 14) {
+      setCnpjStatus("");
+      return;
+    }
+    setCnpjStatus("buscando");
+    try {
+      const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${limpo}`);
+      if (!r.ok) {
+        setCnpjStatus("erro");
+        return;
+      }
+      const dd = await r.json();
+      // Razão social -> Nome; e-mail e telefone quando disponíveis
+      setProp((p) => ({
+        ...p,
+        nome: dd.razao_social || dd.nome_fantasia || p.nome,
+        email: dd.email || p.email,
+        fixo:
+          dd.ddd_telefone_1 && !p.fixo
+            ? mascararTelefone(dd.ddd_telefone_1)
+            : p.fixo,
+      }));
+      // Endereço da obra (caso ainda vazio) — preenche a partir do CNPJ
+      setObra((o) => ({
+        ...o,
+        cep: dd.cep ? mascararCEP(dd.cep) : o.cep,
+        endereco: dd.logradouro || o.endereco,
+        num: dd.numero || o.num,
+        compl: dd.complemento || o.compl,
+        bairro: dd.bairro || o.bairro,
+        cidade: dd.municipio || o.cidade,
+        estado: dd.uf || o.estado,
+      }));
+      setCnpjStatus("ok");
+    } catch (e) {
+      setCnpjStatus("erro");
     }
   };
 
@@ -624,26 +762,31 @@ function App() {
     cy += 2;
 
     sec("1.  DADOS DO PROPRIETÁRIO");
-    kvPairs([
-      ["Nome Completo", prop.nome],
+    const propPairs = [
+      ["Nome Completo / Razão Social", prop.nome],
       ["CPF/CNPJ", prop.cpfCnpj],
       ["E-mail", prop.email],
       ["Celular", prop.celular],
       ["Telefone Fixo", prop.fixo],
       ["Telefone do Proprietário", prop.telProp],
-      ["RG/RNE/RANI", prop.rg],
-      ["Data Nasc.", prop.nasc],
-      ["Filiação", prop.filiacao],
-      ["Laudo médico", prop.laudoMedico],
-      ["NIS Tarifa Social", prop.nis === "Sim" ? prop.numNis : "Não"],
-      ["", ""],
-    ]);
+    ];
+    if (pessoaFisica) {
+      propPairs.push(
+        ["RG/RNE/RANI", prop.rg],
+        ["Data Nasc.", prop.nasc],
+        ["Filiação", prop.filiacao],
+        ["Laudo médico", prop.laudoMedico],
+        ["NIS Tarifa Social", prop.nis === "Sim" ? prop.numNis : "Não"],
+      );
+    }
+    propPairs.push(["", ""]);
+    kvPairs(propPairs);
     cy += 2;
 
     sec("2.  CORRESPONDÊNCIA E FATURA");
     kvPairs([
       ["Receber fatura por e-mail", corr.receberEmail],
-      ["Vencimento desejado", corr.vencimento],
+      ["Dia de vencimento", corr.vencimento ? "Dia " + corr.vencimento : ""],
       ["Conta globalizada", corr.contaGlobal],
       ["", ""],
     ]);
@@ -670,7 +813,6 @@ function App() {
       ["Estado", obra.estado],
       ["CEP", obra.cep],
       ["Localização", obra.localizacao],
-      ["Instalação / UC", obra.instalacaoUC],
     ];
     if (coletivo) obraPairs.push(["Nº ART/TRT de Projeto", obra.art]);
     obraPairs.push(
@@ -725,6 +867,36 @@ function App() {
         `${fmt2(demandaTotalGeral)} kVA`,
       );
       cy += 2;
+      // Detalhamento das UCs de cada torre/bloco
+      blocos.forEach((b, bi) => {
+        const ucs = b.ucs || [];
+        if (!ucs.length) return;
+        sec(
+          `4.${bi + 1}  ${atend.atendA.toUpperCase()} ${b.nome || bi + 1} — UNIDADES CONSUMIDORAS`,
+        );
+        tabela(
+          [
+            "UC",
+            "Complemento",
+            "Nº Predial",
+            "Solicitação",
+            "Atividade",
+            "Instalação",
+            "Disjuntor",
+          ],
+          [26, 24, 22, 32, 24, 24, 30],
+          ucs.map((u) => [
+            u.identificacao,
+            u.complemento,
+            u.nPredial,
+            u.solicitacao,
+            u.atividade,
+            u.solicitacao !== "Conexão Nova" ? u.instalacao : "—",
+            u.disjPara,
+          ]),
+        );
+        cy += 2;
+      });
     } else if (coletivo) {
       sec("4.  UNIDADES CONSUMIDORAS");
       ucBlocos.forEach((u, ui) => {
@@ -742,10 +914,11 @@ function App() {
           ["Mudança de local", u.mudancaLocal],
           ["Atividade principal", u.atividade],
           ["Ramo de atividade", u.ramo],
-          ["Instalação", u.instalacao],
         ];
-        if (u.solicitacao !== "Conexão Nova")
+        if (u.solicitacao !== "Conexão Nova") {
+          pares.push(["Instalação", u.instalacao]);
           pares.push(["Disjuntor De", u.disjDe]);
+        }
         pares.push(["Disjuntor Para", u.disjPara]);
         kvPairs(pares);
         cy += 1;
@@ -1213,13 +1386,46 @@ function App() {
                     onChange={(e) => setProp({ ...prop, nome: e.target.value })}
                   />
                 </Field>
-                <Field label="CPF / CNPJ" req>
-                  <Inp
-                    value={prop.cpfCnpj}
-                    onChange={(e) =>
-                      setProp({ ...prop, cpfCnpj: e.target.value })
-                    }
-                  />
+                <Field
+                  label="CPF / CNPJ"
+                  req
+                  hint={
+                    docInfo.valido === false
+                      ? `${docInfo.tipo} inválido — verifique os dígitos.`
+                      : docInfo.valido === true
+                        ? `${docInfo.tipo} válido.`
+                        : "Digite CPF (pessoa física) ou CNPJ (pessoa jurídica)."
+                  }
+                >
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    <input
+                      value={prop.cpfCnpj || ""}
+                      onChange={(e) => {
+                        const m = mascararCpfCnpj(e.target.value);
+                        setProp({ ...prop, cpfCnpj: m });
+                        if (ehCNPJ(m)) buscarCNPJ(m);
+                        else setCnpjStatus("");
+                      }}
+                      placeholder="000.000.000-00"
+                      style={{
+                        borderColor:
+                          docInfo.valido === false
+                            ? "var(--vermelho)"
+                            : undefined,
+                      }}
+                    />
+                    {cnpjStatus === "buscando" && (
+                      <span className="spinner"></span>
+                    )}
+                    {cnpjStatus === "ok" && <Badge>dados preenchidos</Badge>}
+                    {cnpjStatus === "erro" && (
+                      <span style={{ color: "var(--vermelho)", fontSize: 12 }}>
+                        CNPJ não encontrado
+                      </span>
+                    )}
+                  </div>
                 </Field>
                 <Field label="E-mail" req>
                   <Inp
@@ -1230,73 +1436,95 @@ function App() {
                     }
                   />
                 </Field>
-                <Field label="Filiação (Mãe ou Pai) **">
-                  <Inp
-                    value={prop.filiacao}
-                    onChange={(e) =>
-                      setProp({ ...prop, filiacao: e.target.value })
-                    }
-                  />
-                </Field>
-                <Field label="RG / RNE / RANI **">
-                  <Inp
-                    value={prop.rg}
-                    onChange={(e) => setProp({ ...prop, rg: e.target.value })}
-                  />
-                </Field>
-                <Field label="Data de Nascimento **">
-                  <Inp
-                    type="date"
-                    value={prop.nasc}
-                    onChange={(e) => setProp({ ...prop, nasc: e.target.value })}
-                  />
-                </Field>
+                {pessoaFisica && (
+                  <Field label="Filiação (Mãe ou Pai) **">
+                    <Inp
+                      value={prop.filiacao}
+                      onChange={(e) =>
+                        setProp({ ...prop, filiacao: e.target.value })
+                      }
+                    />
+                  </Field>
+                )}
+                {pessoaFisica && (
+                  <Field label="RG / RNE / RANI **">
+                    <Inp
+                      value={prop.rg}
+                      onChange={(e) =>
+                        setProp({ ...prop, rg: mascararRG(e.target.value) })
+                      }
+                    />
+                  </Field>
+                )}
+                {pessoaFisica && (
+                  <Field label="Data de Nascimento **">
+                    <Inp
+                      type="date"
+                      value={prop.nasc}
+                      onChange={(e) =>
+                        setProp({ ...prop, nasc: e.target.value })
+                      }
+                    />
+                  </Field>
+                )}
                 <Field label="Celular" req>
                   <Inp
                     value={prop.celular}
                     onChange={(e) =>
-                      setProp({ ...prop, celular: e.target.value })
+                      setProp({
+                        ...prop,
+                        celular: mascararCelular(e.target.value),
+                      })
                     }
                   />
                 </Field>
                 <Field label="Telefone Fixo">
                   <Inp
                     value={prop.fixo}
-                    onChange={(e) => setProp({ ...prop, fixo: e.target.value })}
+                    onChange={(e) =>
+                      setProp({ ...prop, fixo: mascararFixo(e.target.value) })
+                    }
                   />
                 </Field>
                 <Field label="Telefone do Proprietário" req>
                   <Inp
                     value={prop.telProp}
                     onChange={(e) =>
-                      setProp({ ...prop, telProp: e.target.value })
+                      setProp({
+                        ...prop,
+                        telProp: mascararTelefone(e.target.value),
+                      })
                     }
                   />
                 </Field>
-                <Field
-                  label="Possui laudo médico (equipamentos essenciais)? **"
-                  span={2}
-                >
-                  <Toggle
-                    value={prop.laudoMedico}
-                    onChange={(v) => setProp({ ...prop, laudoMedico: v })}
-                    options={[
-                      { v: "Sim", l: "Sim" },
-                      { v: "Não", l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field label="Possui NIS para Tarifa Social? **">
-                  <Toggle
-                    value={prop.nis}
-                    onChange={(v) => setProp({ ...prop, nis: v })}
-                    options={[
-                      { v: "Sim", l: "Sim" },
-                      { v: "Não", l: "Não" },
-                    ]}
-                  />
-                </Field>
-                {prop.nis === "Sim" && (
+                {pessoaFisica && (
+                  <Field
+                    label="Possui laudo médico (equipamentos essenciais)? **"
+                    span={2}
+                  >
+                    <Toggle
+                      value={prop.laudoMedico}
+                      onChange={(v) => setProp({ ...prop, laudoMedico: v })}
+                      options={[
+                        { v: "Sim", l: "Sim" },
+                        { v: "Não", l: "Não" },
+                      ]}
+                    />
+                  </Field>
+                )}
+                {pessoaFisica && (
+                  <Field label="Possui NIS para Tarifa Social? **">
+                    <Toggle
+                      value={prop.nis}
+                      onChange={(v) => setProp({ ...prop, nis: v })}
+                      options={[
+                        { v: "Sim", l: "Sim" },
+                        { v: "Não", l: "Não" },
+                      ]}
+                    />
+                  </Field>
+                )}
+                {pessoaFisica && prop.nis === "Sim" && (
                   <Field label="Número do NIS" req>
                     <Inp
                       value={prop.numNis}
@@ -1328,19 +1556,17 @@ function App() {
                     ]}
                   />
                 </Field>
-                <Field label="Data de vencimento desejada">
-                  <Inp
+                <Field label="Data de Vencimento da Fatura">
+                  <Toggle
                     value={corr.vencimento}
-                    onChange={(e) =>
-                      setCorr({ ...corr, vencimento: e.target.value })
-                    }
-                    placeholder="Ex: dia 10"
+                    onChange={(v) => setCorr({ ...corr, vencimento: v })}
+                    options={DIAS_VENCIMENTO.map((d) => ({ v: d, l: d }))}
                   />
                 </Field>
               </div>
               {corr.receberEmail === "Não" && (
                 <div className="grid grid-2 divider">
-                  <Field label="CEP (preenchimento automático)" span={2}>
+                  <Field label="CEP" span={2}>
                     <div
                       style={{ display: "flex", gap: 8, alignItems: "center" }}
                     >
@@ -1348,7 +1574,7 @@ function App() {
                         <Inp
                           value={corr.cep}
                           onChange={(e) => {
-                            const v = e.target.value;
+                            const v = mascararCEP(e.target.value);
                             setCorr({ ...corr, cep: v });
                             buscarCEP(v, "corr");
                           }}
@@ -1469,7 +1695,7 @@ function App() {
               </div>
               {obra.localizacao === "Urbana" && (
                 <div className="grid grid-2" style={{ marginTop: 14 }}>
-                  <Field label="CEP (preenchimento automático)" req span={2}>
+                  <Field label="CEP" req span={2}>
                     <div
                       style={{ display: "flex", gap: 8, alignItems: "center" }}
                     >
@@ -1477,7 +1703,7 @@ function App() {
                         <Inp
                           value={obra.cep}
                           onChange={(e) => {
-                            const v = e.target.value;
+                            const v = mascararCEP(e.target.value);
                             setObra({ ...obra, cep: v });
                             buscarCEP(v, "obra");
                           }}
@@ -1544,14 +1770,6 @@ function App() {
                       value={obra.estado}
                       onChange={(e) =>
                         setObra({ ...obra, estado: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Instalação / UC">
-                    <Inp
-                      value={obra.instalacaoUC}
-                      onChange={(e) =>
-                        setObra({ ...obra, instalacaoUC: e.target.value })
                       }
                     />
                   </Field>
@@ -1843,6 +2061,156 @@ function App() {
                         />
                       </Field>
                     </div>
+
+                    {/* UCs da torre/bloco — preenchimento em massa */}
+                    {(b.ucs || []).length > 0 && (
+                      <div className="uc-torre-wrap">
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            margin: "4px 0 10px",
+                            flexWrap: "wrap",
+                            gap: 8,
+                          }}
+                        >
+                          <span className="subbox-title">
+                            Unidades consumidoras do{" "}
+                            {atend.atendA.toLowerCase()} ({b.ucs.length})
+                          </span>
+                          {b.ucs.length > 1 && (
+                            <Btn
+                              variant="ghost"
+                              onClick={() => replicarUC1Torre(bi)}
+                            >
+                              ⧉ Replicar UC 1 para todas
+                            </Btn>
+                          )}
+                        </div>
+                        {b.ucs.map((u, ui) => (
+                          <div key={ui} className="uc-mini">
+                            <div className="uc-mini-head">
+                              UC {ui + 1}
+                              {ui === 0 && b.ucs.length > 1 && (
+                                <span className="uc-mini-tag">
+                                  modelo p/ replicar
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-3">
+                              <Field label="Identificação">
+                                <Inp
+                                  value={u.identificacao}
+                                  onChange={(e) =>
+                                    setUcTorre(bi, ui, {
+                                      identificacao: e.target.value,
+                                    })
+                                  }
+                                />
+                              </Field>
+                              <Field label="Complemento" req={b.ucs.length > 1}>
+                                <Inp
+                                  value={u.complemento}
+                                  onChange={(e) =>
+                                    setUcTorre(bi, ui, {
+                                      complemento: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Ex: 101"
+                                />
+                              </Field>
+                              <Field label="Nº Predial">
+                                <Inp
+                                  value={u.nPredial}
+                                  onChange={(e) =>
+                                    setUcTorre(bi, ui, {
+                                      nPredial: e.target.value,
+                                    })
+                                  }
+                                />
+                              </Field>
+                              <Field label="Solicitação" req>
+                                <Sel
+                                  value={u.solicitacao}
+                                  onChange={(e) =>
+                                    setUcTorre(bi, ui, {
+                                      solicitacao: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option>Conexão Nova</option>
+                                  <option>Alteração de Carga</option>
+                                  <option>Caixa Existente sem Alteração</option>
+                                </Sel>
+                              </Field>
+                              <Field label="Atividade" req>
+                                <Sel
+                                  value={u.atividade}
+                                  onChange={(e) =>
+                                    setUcTorre(bi, ui, {
+                                      atividade: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option>Residencial</option>
+                                  <option>Comercial</option>
+                                  <option>Industrial</option>
+                                  <option>Rural</option>
+                                </Sel>
+                              </Field>
+                              <Field
+                                label="Ramo de atividade"
+                                req={u.atividade !== "Residencial"}
+                              >
+                                <Inp
+                                  value={u.ramo}
+                                  onChange={(e) =>
+                                    setUcTorre(bi, ui, { ramo: e.target.value })
+                                  }
+                                  placeholder={
+                                    u.atividade === "Residencial"
+                                      ? "—"
+                                      : "Obrigatório"
+                                  }
+                                />
+                              </Field>
+                              {/* Instalação / UC somente se NÃO for conexão nova */}
+                              {u.solicitacao !== "Conexão Nova" && (
+                                <Field label="Instalação / UC" req>
+                                  <Inp
+                                    value={u.instalacao}
+                                    onChange={(e) =>
+                                      setUcTorre(bi, ui, {
+                                        instalacao: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Nº instalação existente"
+                                  />
+                                </Field>
+                              )}
+                              <Field label="Disjuntor da UC">
+                                <Sel
+                                  value={u.disjPara}
+                                  onChange={(e) =>
+                                    setUcTorre(bi, ui, {
+                                      disjPara: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="">Selecione…</option>
+                                  {DISJ.map((d) => (
+                                    <option key={d.fx} value={d.fx}>
+                                      {d.fx}
+                                    </option>
+                                  ))}
+                                </Sel>
+                              </Field>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
 
@@ -1864,6 +2232,19 @@ function App() {
                 title={`Unidades Consumidoras (${ucBlocos.length})`}
                 sub="Preencha os dados de identificação de cada UC. Campos com valor padrão já vêm preenchidos. Em Conexão Nova não há disjuntor 'De' (a instalação ainda não existe)."
               >
+                {ucBlocos.length > 1 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Btn variant="ghost" onClick={replicarUC1Coletivo}>
+                      ⧉ Replicar UC 1 para todas
+                    </Btn>
+                  </div>
+                )}
                 {ucBlocos.map((u, ui) => (
                   <div key={ui} className="uc-block">
                     <div className="uc-block-head">
