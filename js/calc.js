@@ -7,7 +7,10 @@
 const fmt2 = (v) =>
   v == null || isNaN(v)
     ? "0,00"
-    : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    : Number(v).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
 const fmtW = (v) => (Number(v) || 0).toLocaleString("pt-BR");
 
 // Parcela a) iluminação/tomadas — residencial (Tabela 10)
@@ -23,7 +26,10 @@ function calcA_nr(kva, ci) {
   const c = TABELA_11[ci];
   if (!c) return { d: 0, f: "-" };
   if (c.lim === Infinity) return { d: kva * c.fp, f: c.fp };
-  return { d: Math.min(kva, c.lim) * c.fp + Math.max(0, kva - c.lim) * c.fe, f: `${c.fp}/${c.fe}` };
+  return {
+    d: Math.min(kva, c.lim) * c.fp + Math.max(0, kva - c.lim) * c.fe,
+    f: `${c.fp}/${c.fe}`,
+  };
 }
 
 // Parcela b) — subgrupos b1..b5
@@ -56,4 +62,19 @@ function selecionarDisjuntores(demanda, redeMono) {
     }
   }
   return result;
+}
+
+// Extrai a corrente (A) do rótulo do disjuntor (ex.: "Tripolar 63 A" -> 63)
+function correnteDisj(fx) {
+  if (!fx) return 0;
+  const m = String(fx).match(/(\d+)(?:\/\d+)*\s*A/);
+  return m ? Number(m[1]) : 0;
+}
+
+// Lista de disjuntores GERAIS com faixa estritamente MAIOR que a maior UC.
+// Considera apenas tripolares (proteção geral de agrupamento é trifásica).
+function disjuntoresGeraisAcima(maiorCorrenteUC) {
+  return DISJ.filter(
+    (d) => d.tipo === "tri" && correnteDisj(d.fx) > maiorCorrenteUC,
+  ).map((d) => d.fx);
 }

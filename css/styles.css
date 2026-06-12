@@ -111,34 +111,51 @@ body {
   border-radius: 999px;
 }
 
-/* ---------- STEPPER ---------- */
-.stepper {
-  max-width: 1080px;
-  margin: 16px auto 0;
-  padding: 0 20px;
+/* ---------- LAYOUT DUAS COLUNAS (sidebar vertical) ---------- */
+.layout {
+  max-width: 1180px;
+  margin: 0 auto;
   display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  gap: 0;
+  align-items: flex-start;
 }
-.stepper::-webkit-scrollbar { display: none; }
-.step {
+.sidebar {
+  width: 270px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 64px;
+  align-self: flex-start;
+  padding: 24px 16px 24px 20px;
+}
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+  margin-bottom: 12px;
+  padding-left: 6px;
+}
+.vstep {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 11px 12px;
   border-radius: var(--raio-sm);
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
   border: none;
   background: transparent;
   font-family: inherit;
+  width: 100%;
+  text-align: left;
+  position: relative;
+  transition: background 0.15s;
 }
-.step:hover { background: var(--verde-claro); }
-.step-num {
-  width: 24px;
-  height: 24px;
+.vstep + .vstep { margin-top: 2px; }
+.vstep:hover { background: var(--verde-claro); }
+.vstep-num {
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -148,11 +165,50 @@ body {
   background: #dfe4e8;
   color: var(--texto-suave);
   flex-shrink: 0;
+  transition: all 0.15s;
 }
-.step-label { font-size: 13px; font-weight: 600; color: var(--texto-suave); }
-.step.active .step-num { background: var(--verde); color: #fff; }
-.step.active .step-label { color: var(--verde-escuro); font-weight: 700; }
-.step.done .step-num { background: var(--verde-acento); color: #fff; }
+.vstep-label { font-size: 13.5px; font-weight: 600; color: var(--texto-suave); }
+.vstep.active { background: var(--verde-claro); }
+.vstep.active .vstep-num { background: var(--verde); color: #fff; }
+.vstep.active .vstep-label { color: var(--verde-escuro); font-weight: 700; }
+.vstep.done .vstep-num { background: var(--verde-acento); color: #fff; }
+.vstep.done .vstep-label { color: var(--texto); }
+/* linha conectora */
+.vstep:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 24.5px;
+  top: 37px;
+  width: 2px;
+  height: calc(100% - 24px);
+  background: var(--borda);
+  z-index: 0;
+}
+.vstep.done:not(:last-child)::before { background: var(--verde-acento); }
+
+.main-col {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 20px 60px;
+}
+
+@media (max-width: 860px) {
+  .layout { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    position: static;
+    padding: 12px 16px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--borda);
+  }
+  .sidebar-title { display: none; }
+  .vstep { width: auto; white-space: nowrap; padding: 8px 12px; }
+  .vstep:not(:last-child)::before { display: none; }
+  .vstep-label { font-size: 12px; }
+  .main-col { padding: 8px 16px 40px; width: 100%; }
+}
 
 /* ---------- CONTEÚDO ---------- */
 .content {
@@ -481,3 +537,47 @@ input[type="number"] { -moz-appearance: textfield; }
   border-radius: 50%; animation: spin 0.6s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- PREVISÃO DE CARGA (coletivo) ---------- */
+.prev-carga {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+@media (max-width: 720px) { .prev-carga { grid-template-columns: repeat(2, 1fr); } }
+.prev-total {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--borda);
+}
+.prev-total .kpi { flex: 1; min-width: 140px; }
+
+/* ---------- BLOCO DE UC (coletivo) ---------- */
+.uc-block {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-sm);
+  padding: 14px;
+  margin-bottom: 12px;
+  background: var(--input-bg);
+}
+.uc-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.uc-block-title { font-weight: 700; color: var(--verde-escuro); font-size: 14px; }
+.disj-pair { display: flex; gap: 8px; }
+.disj-pair > div { flex: 1; }
+
+/* destaque do disjuntor geral */
+.geral-box {
+  background: #fff;
+  border: 2px solid var(--verde);
+  border-radius: var(--raio-sm);
+  padding: 14px;
+  margin-top: 14px;
+}
