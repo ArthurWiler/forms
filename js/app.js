@@ -225,6 +225,29 @@ function App() {
   const [cepStatus, setCepStatus] = useState({ obra: "", corr: "" });
   const [cnpjStatus, setCnpjStatus] = useState("");
 
+  // ---- Logo Cemig para o PDF (pré-carregada como data URL) ----
+  const [logoPDF, setLogoPDF] = useState(null); // { url, w, h }
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        c.getContext("2d").drawImage(img, 0, 0);
+        setLogoPDF({
+          url: c.toDataURL("image/png"),
+          w: img.naturalWidth,
+          h: img.naturalHeight,
+        });
+      } catch (e) {
+        /* imagem em outra origem / canvas tainted — ignora */
+      }
+    };
+    img.src = "imgs/logo-cemig.png";
+  }, []);
+
   // Pessoa física? (depende do documento digitado em CPF/CNPJ)
   const docInfo = useMemo(() => validarCpfCnpj(prop.cpfCnpj), [prop.cpfCnpj]);
   const pessoaFisica = docInfo.tipo !== "CNPJ"; // CPF ou vazio => trata como PF
@@ -615,6 +638,19 @@ function App() {
         MG,
         13.5,
       );
+      // Logo Cemig (canto superior direito da barra), preservando proporção
+      if (logoPDF) {
+        const logoH = 10; // altura em mm — ajuste aqui se necessário
+        const logoW = logoH * (logoPDF.w / logoPDF.h);
+        doc.addImage(
+          logoPDF.url,
+          "PNG",
+          PW - MG - logoW,
+          (18 - logoH) / 2,
+          logoW,
+          logoH,
+        );
+      }
       cy = 24;
     };
     const footer = () => {
@@ -954,9 +990,7 @@ function App() {
           pares.push(
             ["Nº Instalação", u.instalacao],
             ["Mudança de local", u.mudancaLocal],
-            ["Disjuntor De", u.disjDe],
           );
-        pares.push(["Disjuntor Para", u.disjPara || u.disjEscolhido]);
         kvPairs(pares);
         const qtds = u.cargas?.qtds || [];
         const itens = CAT.map((c, i) => ({ ...c, q: qtds[i] || 0 })).filter(
@@ -988,12 +1022,17 @@ function App() {
           `Carga ${fmt2(u.cargas?._cargaKw || 0)} kW  |  Demanda`,
           `${fmt2(u.cargas?._demanda || 0)} kVA`,
         );
-        if (u.cargas?._disjuntores?.length)
-          fullLine(
-            "Disjuntor sugerido (ND-5.1)",
-            u.cargas._disjuntores.join("  ·  "),
-          );
-        if (u.disjEscolhido) fullLine("Disjuntor escolhido", u.disjEscolhido);
+        // Disjuntores — informação consolidada em um único bloco
+        if (u.solicitacao !== "Conexão Nova" && u.disjDe)
+          fullLine("Disjuntor anterior (De)", u.disjDe);
+        fullLine(
+          "Disjuntor sugerido (ND-5.1)",
+          (u.cargas?._disjuntores || []).join("  ·  ") || "—",
+        );
+        fullLine(
+          "Disjuntor escolhido",
+          u.disjEscolhido || (u.cargas?._disjuntores || [])[0] || "—",
+        );
         cy += 2;
       });
       sec("5.  GERADOR DE EMERGÊNCIA");
@@ -1049,6 +1088,7 @@ function App() {
     gerador,
     obs,
     demandaTotalGeral,
+    logoPDF,
   ]);
 
   // ============================================================
@@ -2705,6 +2745,28 @@ function App() {
                     onChange={(c) => setUcDet(ui, { cargas: c })}
                     redeMono={redeMono}
                   />
+                  <div className="kpi-row" style={{ marginTop: 12 }}>
+                    <div className="kpi">
+                      <div className="kpi-label">Carga Instalada</div>
+                      <div className="kpi-value">
+                        {fmt2(u.cargas?._cargaKw || 0)} kW
+                      </div>
+                    </div>
+                    <div className="kpi">
+                      <div className="kpi-label">Demanda Calculada</div>
+                      <div className="kpi-value">
+                        {fmt2(u.cargas?._demanda || 0)} kVA
+                      </div>
+                    </div>
+                    <div className="kpi dark">
+                      <div className="kpi-label">Disjuntor Sugerido</div>
+                      <div className="kpi-value">
+                        {u.cargas?._disjuntores?.length
+                          ? u.cargas._disjuntores.join(" · ")
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
                   {u.cargas?._disjuntores?.length > 0 && (
                     <div style={{ marginTop: 12 }}>
                       <Field label={`Disjuntor escolhido para a UC ${ui + 1}`}>

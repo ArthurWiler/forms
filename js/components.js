@@ -217,25 +217,6 @@ function CalcDemanda({ data, onChange, redeMono }) {
 
   return (
     <div>
-      <div className="kpi-row">
-        <div className="kpi">
-          <div className="kpi-label">Carga Instalada</div>
-          <div className="kpi-value">{fmt2(cargaInstalada)} kW</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Demanda Calculada</div>
-          <div className="kpi-value">{fmt2(demandaTotal)} kVA</div>
-        </div>
-        <div className="kpi dark">
-          <div className="kpi-label">Disjuntor Sugerido</div>
-          <div className="kpi-value">
-            {disjuntores.length
-              ? disjuntores.map((x) => x.fx).join(" · ")
-              : "—"}
-          </div>
-        </div>
-      </div>
-
       <Field label="Atividade da Unidade">
         <div className="toggle-group" style={{ alignItems: "center" }}>
           <Toggle
