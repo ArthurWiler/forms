@@ -101,6 +101,7 @@ const ucBlocoPadrao = (i) => ({
   instalacao: "",
   disjDe: "",
   disjPara: "Bipolar 63 A",
+  nd: "5.2", // norma atendente (atendimento híbrido): "5.1" ou "5.2"
   // Previsão de carga por UC (coletivo)
   prev: {
     ilum: "",
@@ -148,6 +149,15 @@ const ucTorrePadrao = (i) => ({
   ramo: "",
   instalacao: "",
   disjPara: "Bipolar 63 A",
+  prev: {
+    ilum: "",
+    tomada: "",
+    chuveiro: "",
+    ar: "",
+    outros: "",
+    outrosDesc: "",
+    demanda: "",
+  },
 });
 
 // Torre/Bloco (modo múltiplas torres) — preenchimento em massa
@@ -315,6 +325,41 @@ function App() {
     coletivo &&
     !multiTorres &&
     atend.escopo === "Alteração de Carga com alteração do disjuntor geral";
+  // Atendimento híbrido (UCs atendidas por ND 5.1 ou ND 5.2)
+  const hibrido =
+    coletivo && !multiTorres && atend.solicitacao === SOLICITACOES[3];
+  // Validação bloqueante do híbrido:
+  // - ND 5.1: número predial obrigatório e DISTINTO entre as UCs 5.1
+  // - ND 5.2: compartilham o mesmo predial e devem diferir pelo COMPLEMENTO
+  const validacaoHibrido = useMemo(() => {
+    if (!hibrido) return { ok: true, erros: [] };
+    const erros = [];
+    const u51 = ucBlocos.filter((u) => u.nd === "5.1");
+    const u52 = ucBlocos.filter((u) => u.nd === "5.2");
+    const pred51 = u51.map((u) => (u.nPredial || "").trim());
+    if (pred51.some((p) => !p))
+      erros.push("ND 5.1: informe o nº predial de todas as UCs 5.1.");
+    const dup51 = pred51.filter(
+      (p) => p && pred51.indexOf(p) !== pred51.lastIndexOf(p),
+    );
+    if (dup51.length)
+      erros.push(
+        "ND 5.1: os números prediais devem ser distintos entre as UCs 5.1.",
+      );
+    const comp52 = u52.map((u) => (u.complemento || "").trim());
+    if (u52.length > 1 && comp52.some((c) => !c))
+      erros.push(
+        "ND 5.2: informe o complemento de todas as UCs 5.2 (elas compartilham o mesmo nº predial).",
+      );
+    const dup52 = comp52.filter(
+      (c) => c && comp52.indexOf(c) !== comp52.lastIndexOf(c),
+    );
+    if (dup52.length)
+      erros.push(
+        "ND 5.2: os complementos devem ser distintos (mesmo predial, diferindo só pelo complemento).",
+      );
+    return { ok: erros.length === 0, erros };
+  }, [hibrido, ucBlocos]);
   // Preenchimento em massa: replica a UC 1 para as demais (mantém identificação/complemento/instalação individuais)
   const replicarUC1Coletivo = () =>
     setUcBlocos((p) => {
@@ -378,6 +423,35 @@ function App() {
             }
           : b,
       ),
+    );
+
+  // Atualiza a previsão de carga de uma UC dentro de uma torre
+  const setUcTorrePrev = (bi, ui, patch) =>
+    setBlocos((p) =>
+      p.map((b, idx) =>
+        idx === bi
+          ? {
+              ...b,
+              ucs: (b.ucs || []).map((u, k) =>
+                k === ui ? { ...u, prev: { ...(u.prev || {}), ...patch } } : u,
+              ),
+            }
+          : b,
+      ),
+    );
+  // Replica a previsão da UC 1 de uma torre para as demais UCs da mesma torre
+  const replicarPrevTorre = (bi) =>
+    setBlocos((p) =>
+      p.map((b, idx) => {
+        if (idx !== bi) return b;
+        const base = ((b.ucs || [])[0] || {}).prev || {};
+        return {
+          ...b,
+          ucs: (b.ucs || []).map((u, k) =>
+            k === 0 ? u : { ...u, prev: { ...base } },
+          ),
+        };
+      }),
     );
 
   // Preenchimento em massa: replica a UC 1 de uma torre para as demais UCs da mesma torre
@@ -970,6 +1044,30 @@ function App() {
             u.disjPara,
           ]),
         );
+        cy += 1;
+        tabela(
+          [
+            "UC",
+            "Ilum.",
+            "Tomada",
+            "Chuveiro",
+            "Ar",
+            "Outros",
+            "Carga (kW)",
+            "Dem. (kVA)",
+          ],
+          [26, 18, 20, 22, 16, 18, 24, 24],
+          ucs.map((u) => [
+            u.identificacao,
+            (u.prev || {}).ilum || "—",
+            (u.prev || {}).tomada || "—",
+            (u.prev || {}).chuveiro || "—",
+            (u.prev || {}).ar || "—",
+            (u.prev || {}).outros || "—",
+            fmt2(prevKwUC(u)),
+            (u.prev || {}).demanda || "—",
+          ]),
+        );
         cy += 2;
       });
     } else if (coletivo) {
@@ -982,7 +1080,7 @@ function App() {
         doc.text(`${u.identificacao || "UC " + (ui + 1)}`, MG + 1, cy + 4);
         cy += 6;
         const pares = [
-          ["Nº Predial", obra.num],
+          ["Nº Predial", hibrido && u.nd === "5.1" ? u.nPredial : obra.num],
           ["Complemento", u.complemento],
           ["Caixa", u.caixa],
           ["Solicitação", u.solicitacao],
@@ -990,6 +1088,7 @@ function App() {
           ["Atividade principal", u.atividade],
           ["Ramo de atividade", u.ramo],
         ];
+        if (hibrido) pares.unshift(["Norma", `ND ${u.nd}`]);
         if (u.solicitacao !== "Conexão Nova") {
           pares.push(["Instalação", u.instalacao]);
           pares.push(["Disjuntor De", u.disjDe]);
@@ -1149,6 +1248,7 @@ function App() {
     prevTotalKw,
     demandaPrevTotal,
     trocaDisjGeral,
+    hibrido,
     ucsDet,
     ucBlocos,
     blocos,
@@ -2387,6 +2487,113 @@ function App() {
                             ))}
                           </div>
                         )}
+                        {(b.ucs || []).length > 0 && (
+                          <div
+                            className="prev-table-wrap"
+                            style={{ marginTop: 14 }}
+                          >
+                            <div className="prev-toolbar">
+                              <strong
+                                style={{
+                                  marginRight: "auto",
+                                  color: "var(--verde-escuro)",
+                                }}
+                              >
+                                Previsão de carga das UCs
+                              </strong>
+                              {b.ucs.length > 1 && (
+                                <Btn
+                                  variant="ghost"
+                                  onClick={() => replicarPrevTorre(bi)}
+                                >
+                                  Replicar previsão da UC 1 para todas
+                                </Btn>
+                              )}
+                            </div>
+                            <table className="prev-table">
+                              <thead>
+                                <tr>
+                                  <th>Unidade</th>
+                                  <th>Ilum. (kW)</th>
+                                  <th>Tomada (kW)</th>
+                                  <th>Chuveiro (kW)</th>
+                                  <th>Ar Cond. (kW)</th>
+                                  <th>Outros (kW)</th>
+                                  <th>Carga (kW)</th>
+                                  <th className="col-demanda">Demanda (kVA)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {b.ucs.map((u, ui) => (
+                                  <tr key={ui}>
+                                    <td className="uc-name">
+                                      {u.identificacao || `UC ${ui + 1}`}
+                                    </td>
+                                    {[
+                                      "ilum",
+                                      "tomada",
+                                      "chuveiro",
+                                      "ar",
+                                      "outros",
+                                    ].map((k) => (
+                                      <td key={k}>
+                                        <input
+                                          type="number"
+                                          value={(u.prev || {})[k] || ""}
+                                          onChange={(e) =>
+                                            setUcTorrePrev(bi, ui, {
+                                              [k]: e.target.value,
+                                            })
+                                          }
+                                          placeholder="0,0"
+                                        />
+                                      </td>
+                                    ))}
+                                    <td className="carga-cell">
+                                      {fmt2(prevKwUC(u))}
+                                    </td>
+                                    <td className="col-demanda">
+                                      <input
+                                        className="demanda-prev"
+                                        type="number"
+                                        value={(u.prev || {}).demanda || ""}
+                                        onChange={(e) =>
+                                          setUcTorrePrev(bi, ui, {
+                                            demanda: e.target.value,
+                                          })
+                                        }
+                                        placeholder="0,0"
+                                      />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr>
+                                  <td className="uc-name">Total do bloco</td>
+                                  <td colSpan={5}></td>
+                                  <td className="carga-cell">
+                                    {fmt2(
+                                      b.ucs.reduce(
+                                        (s, u) => s + prevKwUC(u),
+                                        0,
+                                      ),
+                                    )}
+                                  </td>
+                                  <td className="col-demanda total-dem">
+                                    {fmt2(
+                                      b.ucs.reduce(
+                                        (s, u) =>
+                                          s + num((u.prev || {}).demanda),
+                                        0,
+                                      ),
+                                    )}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        )}
                       </div>
                     ))}
 
@@ -2527,6 +2734,27 @@ function App() {
                     </Card>
                   )}
 
+                  {hibrido && !validacaoHibrido.ok && (
+                    <div
+                      className="alert alert-warn"
+                      style={{ marginBottom: 14 }}
+                    >
+                      <strong>Atendimento híbrido — pendências:</strong>
+                      <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                        {validacaoHibrido.erros.map((e, i) => (
+                          <li key={i}>{e}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {hibrido && validacaoHibrido.ok && (
+                    <div
+                      className="alert alert-ok"
+                      style={{ marginBottom: 14 }}
+                    >
+                      Classificação ND 5.1 / ND 5.2 das UCs está consistente.
+                    </div>
+                  )}
                   <Card
                     eyebrow="Identificação"
                     title={`Unidades Consumidoras (${ucBlocos.length})`}
@@ -2556,6 +2784,22 @@ function App() {
                           </Badge>
                         </div>
                         <div className="grid grid-3">
+                          {hibrido && (
+                            <Field
+                              label="Norma de atendimento"
+                              hint="ND 5.1 = unidade isolada (predial distinto). ND 5.2 = agrupamento (mesmo predial, varia só o complemento)."
+                            >
+                              <Sel
+                                value={u.nd}
+                                onChange={(e) =>
+                                  setBloco(ui, { nd: e.target.value })
+                                }
+                              >
+                                <option value="5.1">ND 5.1</option>
+                                <option value="5.2">ND 5.2</option>
+                              </Sel>
+                            </Field>
+                          )}
                           <Field
                             label="Identificação"
                             hint="Ex: Torre 1 - UC 1"
@@ -2567,15 +2811,34 @@ function App() {
                               }
                             />
                           </Field>
-                          <Field
-                            label="Nº Predial"
-                            hint="Igual ao número de Dados da Obra (mesmo para todas as UCs)."
-                          >
-                            <div className="readonly-val">
-                              {obra.num ||
-                                "— informe o número em Dados da Obra"}
-                            </div>
-                          </Field>
+                          {hibrido && u.nd === "5.1" ? (
+                            <Field
+                              label="Nº Predial"
+                              req
+                              hint="ND 5.1: deve ser distinto entre as UCs 5.1."
+                            >
+                              <Inp
+                                value={u.nPredial}
+                                onChange={(e) =>
+                                  setBloco(ui, { nPredial: e.target.value })
+                                }
+                              />
+                            </Field>
+                          ) : (
+                            <Field
+                              label="Nº Predial"
+                              hint={
+                                hibrido
+                                  ? "ND 5.2: mesmo predial de Dados da Obra; diferencie pelo complemento."
+                                  : "Igual ao número de Dados da Obra (mesmo para todas as UCs)."
+                              }
+                            >
+                              <div className="readonly-val">
+                                {obra.num ||
+                                  "— informe o número em Dados da Obra"}
+                              </div>
+                            </Field>
+                          )}
                           <Field label="Complemento" req={ucBlocos.length > 1}>
                             <Inp
                               value={u.complemento}
@@ -3272,7 +3535,20 @@ function App() {
                     )}
                   </Card>
                   <Card sub="Anexe à solicitação: planta de situação (A4), ART/TRT de projeto (quando aplicável) e documentos de regularidade do imóvel, conforme as orientações da CEMIG.">
-                    <Btn variant="dark" onClick={gerarPDF}>
+                    {hibrido && !validacaoHibrido.ok && (
+                      <div
+                        className="alert alert-warn"
+                        style={{ marginBottom: 12 }}
+                      >
+                        Corrija as pendências do atendimento híbrido (aba
+                        Unidades Consumidoras) para liberar a exportação do PDF.
+                      </div>
+                    )}
+                    <Btn
+                      variant="dark"
+                      onClick={gerarPDF}
+                      disabled={hibrido && !validacaoHibrido.ok}
+                    >
                       📄 Exportar PDF
                     </Btn>
                   </Card>
@@ -3288,7 +3564,11 @@ function App() {
                   Etapa {Math.max(idx, 0) + 1} de {abas.length}
                 </span>
                 {aba === "revisar" ? (
-                  <Btn variant="primary" onClick={gerarPDF}>
+                  <Btn
+                    variant="primary"
+                    onClick={gerarPDF}
+                    disabled={hibrido && !validacaoHibrido.ok}
+                  >
                     📄 Exportar PDF
                   </Btn>
                 ) : (
