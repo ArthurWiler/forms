@@ -101,7 +101,25 @@ const ucBlocoPadrao = (i) => ({
   instalacao: "",
   disjDe: "",
   disjPara: "Bipolar 63 A",
+  // Previsão de carga por UC (coletivo)
+  prev: {
+    ilum: "",
+    tomada: "",
+    chuveiro: "",
+    ar: "",
+    outros: "",
+    outrosDesc: "",
+    demanda: "",
+  },
 });
+
+// Soma de carga prevista (kW) de uma UC do coletivo
+const prevKwUC = (u) =>
+  ["ilum", "tomada", "chuveiro", "ar", "outros"].reduce(
+    (s, k) =>
+      s + (parseFloat(String((u.prev || {})[k]).replace(",", ".")) || 0),
+    0,
+  );
 
 // UC detalhada (individual) — identificação + calculadora
 const ucDetalhadaPadrao = () => ({
@@ -148,6 +166,8 @@ const blocoPadrao = (i) => ({
 // ============================================================
 function App() {
   const [aba, setAba] = useState("orient");
+  // Tela inicial: modalidade escolhida (null = ainda na tela inicial)
+  const [modalidade, setModalidade] = useState(null);
 
   // ---- Tipo de atendimento ----
   const [atend, setAtend] = useState({
@@ -159,6 +179,8 @@ function App() {
     solicitacao: SOLICITACOES[1], // padrão (coletivo)
     escopo: "Ligação Nova", // padrão
     disjuntorGeral: "",
+    disjGeralAtual: "", // disjuntor geral existente (alteração de carga com troca)
+    demandaAtual: "", // demanda atual (kVA) em alteração de carga
     atendA: "Bloco", // múltiplas torres: atendimento a Bloco/Torre
     nBlocos: 1,
   });
@@ -252,25 +274,7 @@ function App() {
   const docInfo = useMemo(() => validarCpfCnpj(prop.cpfCnpj), [prop.cpfCnpj]);
   const pessoaFisica = docInfo.tipo !== "CNPJ"; // CPF ou vazio => trata como PF
 
-  // ---- Previsão de carga (coletivo comum) ----
-  const [prev, setPrev] = useState({
-    ilum: "",
-    tomada: "",
-    chuveiro: "",
-    ar: "",
-    outrosDesc: "Outros itens nas UCs",
-    outros: "",
-    demanda: "",
-  });
   const num = (v) => parseFloat(String(v).replace(",", ".")) || 0;
-  const prevTotalKw = useMemo(
-    () =>
-      ["ilum", "tomada", "chuveiro", "ar", "outros"].reduce(
-        (s, k) => s + num(prev[k]),
-        0,
-      ),
-    [prev],
-  );
 
   // ---- UCs detalhadas (individual) — uma calculadora por UC ----
   const [ucsDet, setUcsDet] = useState([ucDetalhadaPadrao()]);
@@ -281,6 +285,36 @@ function App() {
   const [ucBlocos, setUcBlocos] = useState([ucBlocoPadrao(0)]);
   const setBloco = (i, patch) =>
     setUcBlocos((p) => p.map((u, idx) => (idx === i ? { ...u, ...patch } : u)));
+  // Previsão por UC (coletivo)
+  const setBlocoPrev = (i, patch) =>
+    setUcBlocos((p) =>
+      p.map((u, idx) =>
+        idx === i ? { ...u, prev: { ...(u.prev || {}), ...patch } } : u,
+      ),
+    );
+  // Preenchimento em massa da previsão: replica a previsão da UC 1 para todas
+  const replicarPrevTodas = () =>
+    setUcBlocos((p) =>
+      p.map((u, idx) =>
+        idx === 0 ? u : { ...u, prev: { ...(p[0].prev || {}) } },
+      ),
+    );
+  // Totais somados automaticamente a partir de cada UC
+  const prevTotalKw = useMemo(
+    () => ucBlocos.reduce((s, u) => s + prevKwUC(u), 0),
+    [ucBlocos],
+  );
+  const demandaPrevTotal = useMemo(
+    () => ucBlocos.reduce((s, u) => s + num((u.prev || {}).demanda), 0),
+    [ucBlocos],
+  );
+  // Alteração de carga no coletivo / com troca de disjuntor geral
+  const isAlteracaoColetivo =
+    coletivo && !multiTorres && /Alteração de Carga/.test(atend.escopo || "");
+  const trocaDisjGeral =
+    coletivo &&
+    !multiTorres &&
+    atend.escopo === "Alteração de Carga com alteração do disjuntor geral";
   // Preenchimento em massa: replica a UC 1 para as demais (mantém identificação/complemento/instalação individuais)
   const replicarUC1Coletivo = () =>
     setUcBlocos((p) => {
@@ -562,9 +596,9 @@ function App() {
         (s, b) => s + num(b.demandaBloco) + num(b.demandaIncendio),
         0,
       );
-    if (coletivo) return num(prev.demanda);
+    if (coletivo) return demandaPrevTotal;
     return ucsDet.reduce((s, u) => s + (u.cargas?._demanda || 0), 0);
-  }, [multiTorres, blocos, coletivo, prev.demanda, ucsDet]);
+  }, [multiTorres, blocos, coletivo, demandaPrevTotal, ucsDet]);
 
   const coordObrigatoria =
     obra.localizacao === "Rural" && obra.distMenor30 === "Não";
@@ -679,41 +713,50 @@ function App() {
       doc.text(t, MG + 5, cy + 4.8);
       cy += 9;
     };
+    const _vazio = (v) =>
+      v === undefined ||
+      v === null ||
+      String(v).trim() === "" ||
+      String(v).trim() === "—";
     const kvPairs = (pairs) => {
       const colW = CW / 2;
-      for (let i = 0; i < pairs.length; i += 2) {
-        checkSpace(8);
-        [pairs[i], pairs[i + 1]].forEach((p, ci) => {
+      const kept = (pairs || []).filter((p) => p && !_vazio(p[1]));
+      for (let i = 0; i < kept.length; i += 2) {
+        checkSpace(6);
+        [kept[i], kept[i + 1]].forEach((p, ci) => {
           if (!p) return;
           const x = MG + ci * colW;
           doc.setFont("helvetica", "bold");
           doc.setFontSize(9);
           doc.setTextColor(30, 32, 42);
-          doc.text(p[0] + ":", x + 1, cy + 3);
+          const lbl = p[0] + ": ";
+          doc.text(lbl, x + 1, cy + 4.5);
+          const lw = doc.getTextWidth(lbl);
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(10);
-          doc.setTextColor(30, 32, 42);
+          doc.setFontSize(9);
           doc.text(
-            doc.splitTextToSize(String(p[1] || "—"), colW - 4)[0],
-            x + 1,
-            cy + 6.8,
+            doc.splitTextToSize(String(p[1]), Math.max(10, colW - 4 - lw))[0],
+            x + 1 + lw,
+            cy + 4.5,
           );
         });
-        cy += 8.5;
+        cy += 7;
       }
     };
     const fullLine = (label, val) => {
-      const lines = doc.splitTextToSize(String(val || "—"), CW - 4);
-      checkSpace(5 + lines.length * 4);
+      if (_vazio(val)) return;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(30, 32, 42);
-      doc.text(label + ":", MG + 1, cy + 3);
+      const lbl = label + ": ";
+      const lw = doc.getTextWidth(lbl);
+      const lines = doc.splitTextToSize(String(val), Math.max(20, CW - 4 - lw));
+      checkSpace(4 + lines.length * 4.2);
+      doc.text(lbl, MG + 1, cy + 4.5);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(30, 32, 42);
-      doc.text(lines, MG + 1, cy + 7);
-      cy += 5 + lines.length * 4;
+      doc.setFontSize(9);
+      doc.text(lines, MG + 1 + lw, cy + 4.5);
+      cy += 2 + lines.length * 4.2;
     };
     const totRow = (label, val) => {
       checkSpace(8);
@@ -939,7 +982,7 @@ function App() {
         doc.text(`${u.identificacao || "UC " + (ui + 1)}`, MG + 1, cy + 4);
         cy += 6;
         const pares = [
-          ["Nº Predial", u.nPredial],
+          ["Nº Predial", obra.num],
           ["Complemento", u.complemento],
           ["Caixa", u.caixa],
           ["Solicitação", u.solicitacao],
@@ -955,23 +998,47 @@ function App() {
         kvPairs(pares);
         cy += 1;
       });
-      sec("5.  PREVISÃO DE CARGA");
-      kvPairs([
-        ["Iluminação (kW)", prev.ilum],
-        ["Tomada (kW)", prev.tomada],
-        ["Chuveiro (kW)", prev.chuveiro],
-        ["Ar Cond. (kW)", prev.ar],
-        ["Outros (kW)", prev.outros],
-        ["Descrição outros", prev.outrosDesc],
-      ]);
+      sec("5.  PREVISÃO DE CARGA POR UNIDADE CONSUMIDORA");
+      tabela(
+        [
+          "Unidade",
+          "Ilum.",
+          "Tomada",
+          "Chuveiro",
+          "Ar Cond.",
+          "Outros",
+          "Carga (kW)",
+          "Dem. (kVA)",
+        ],
+        [30, 20, 22, 24, 22, 20, 22, 22],
+        ucBlocos.map((u) => [
+          u.identificacao || "UC",
+          (u.prev || {}).ilum || "—",
+          (u.prev || {}).tomada || "—",
+          (u.prev || {}).chuveiro || "—",
+          (u.prev || {}).ar || "—",
+          (u.prev || {}).outros || "—",
+          fmt2(prevKwUC(u)),
+          (u.prev || {}).demanda || "—",
+        ]),
+      );
       totRow(
         `Total ${fmt2(prevTotalKw)} kW  |  Demanda`,
         `${fmt2(demandaTotalGeral)} kVA`,
       );
       cy += 2;
-      if (atend.disjuntorGeral) {
+      if (atend.disjuntorGeral || trocaDisjGeral) {
         sec("6.  DISJUNTOR GERAL");
-        fullLine("Disjuntor geral do agrupamento", atend.disjuntorGeral);
+        if (trocaDisjGeral) {
+          kvPairs([
+            ["Disjuntor geral existente", atend.disjGeralAtual],
+            ["Disjuntor geral novo", atend.disjuntorGeral],
+            ["Demanda atual (kVA)", atend.demandaAtual],
+            ["Demanda futura (kVA)", fmt2(demandaPrevTotal)],
+          ]);
+        } else {
+          fullLine("Disjuntor geral do agrupamento", atend.disjuntorGeral);
+        }
         cy += 2;
       }
     } else {
@@ -982,7 +1049,7 @@ function App() {
           ["Solicitação", u.solicitacao],
           ["Atividade principal", u.atividade],
           ["Ramo de atividade", u.ramo],
-          ["Nº Predial", u.nPredial],
+          ["Nº Predial", obra.num],
           ["Complemento", u.complemento],
           ["Caixa / Identificação", u.caixa],
         ];
@@ -1079,8 +1146,9 @@ function App() {
     prop,
     corr,
     obra,
-    prev,
     prevTotalKw,
+    demandaPrevTotal,
+    trocaDisjGeral,
     ucsDet,
     ucBlocos,
     blocos,
@@ -1120,1118 +1188,1634 @@ function App() {
         </div>
       </div>
 
-      <div className="form-header">
-        <h1>
-          Formulário de Orçamento de Conexão / Alteração de Carga em Baixa
-          Tensão
-        </h1>
-        <p>
-          Preenchimento digital unificado para solicitações em BT, conforme as
-          normas CEMIG ND-5.1 / ND-5.2 e a REN ANEEL nº 1.000/2021.
-        </p>
-        <span className="flow-badge">
-          {multiTorres
-            ? "Múltiplas Torres / Blocos"
-            : coletivo
-              ? "Coletivo — Proteção Geral"
-              : "Individual / até 3 caixas"}{" "}
-          · Demanda {fmt2(demandaTotalGeral)} kVA
-        </span>
-      </div>
-
-      <div className="layout">
-        <aside className="sidebar">
-          <div className="sidebar-title">Progresso do preenchimento</div>
-          {abas.map((a, i) => (
+      {!modalidade ? (
+        <div className="modalidade-screen">
+          <div className="modalidade-head">
+            <h1>Selecione o tipo de solicitação</h1>
+            <p>
+              Escolha a modalidade de atendimento para iniciar o preenchimento.
+            </p>
+          </div>
+          <div className="modalidade-grid">
             <button
-              key={a.k}
-              className={
-                "vstep" + (a.k === aba ? " active" : i < idx ? " done" : "")
-              }
-              onClick={() => setAba(a.k)}
+              className="modalidade-card"
+              onClick={() => setModalidade("BT")}
             >
-              <span className="vstep-num">{i === 0 ? "i" : i}</span>
-              <span className="vstep-label">{a.l}</span>
+              <span className="modalidade-tag">Disponível</span>
+              <h2>Atendimento em Baixa Tensão</h2>
+              <p>Ligação nova ou alteração de carga em BT (ND-5.1 / ND-5.2).</p>
             </button>
-          ))}
-        </aside>
-
-        <main className="main-col fade-in" key={aba}>
-          {/* ===== ORIENTAÇÕES ===== */}
-          {aba === "orient" && (
-            <Card
-              eyebrow="Comece por aqui"
-              title="Orientações para preenchimento"
-              sub={ORIENTACOES.intro}
+            <button
+              className="modalidade-card soon"
+              onClick={() => setModalidade("MT")}
             >
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "var(--verde-escuro)",
-                  fontSize: 14,
-                  marginBottom: 4,
-                }}
-              >
-                {ORIENTACOES.geral.titulo}
-              </div>
-              <ul className="orient-list">
-                {ORIENTACOES.geral.itens.map((it, i) => (
-                  <li key={i} className="orient-item">
-                    <span className="orient-num">{i + 1}</span>
-                    <p>{it}</p>
-                  </li>
-                ))}
-              </ul>
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "var(--verde-escuro)",
-                  fontSize: 14,
-                  margin: "18px 0 4px",
-                }}
-              >
-                {ORIENTACOES.individual.titulo}
-              </div>
-              <ul className="orient-list">
-                {ORIENTACOES.individual.itens.map((it, i) => (
-                  <li key={i} className="orient-item">
-                    <span className="orient-num">{i + 1}</span>
-                    <p>{it}</p>
-                  </li>
-                ))}
-              </ul>
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "var(--verde-escuro)",
-                  fontSize: 14,
-                  margin: "18px 0 4px",
-                }}
-              >
-                {ORIENTACOES.coletivo.titulo}
-              </div>
-              <ul className="orient-list">
-                {ORIENTACOES.coletivo.itens.map((it, i) => (
-                  <li key={i} className="orient-item">
-                    <span className="orient-num">{i + 1}</span>
-                    <p>{it}</p>
-                  </li>
-                ))}
-              </ul>
-              <div className="callout">{ORIENTACOES.callout}</div>
-              <div className="legend">
-                <span>
-                  <span className="req">*</span> Campo de preenchimento
-                  obrigatório
-                </span>
-                <span>
-                  <span className="req">**</span> Obrigatório para pessoa física
-                </span>
-              </div>
-              <div style={{ marginTop: 16 }}>
-                <Btn variant="primary" onClick={irProx}>
-                  Iniciar preenchimento →
-                </Btn>
-              </div>
-            </Card>
-          )}
-
-          {/* ===== TIPO DE ATENDIMENTO ===== */}
-          {aba === "tipo" && (
-            <Card
-              eyebrow="Etapa 1"
-              title="Tipo de Atendimento"
-              sub="O tipo de formulário é definido pela presença ou não de disjuntor geral. Os campos seguintes se adaptam à sua escolha."
+              <span className="modalidade-tag">Em breve</span>
+              <h2>Atendimento em Média Tensão</h2>
+              <p>Conexão em Média Tensão. Em desenvolvimento.</p>
+            </button>
+            <button
+              className="modalidade-card soon"
+              onClick={() => setModalidade("GD")}
             >
-              <div className="grid grid-2 divider">
-                <Field label="Solicitação" req>
-                  <Sel
-                    value={atend.solicitacao}
-                    onChange={(e) =>
-                      setAtend({ ...atend, solicitacao: e.target.value })
-                    }
-                  >
-                    {SOLICITACOES.map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </Sel>
-                </Field>
-                <Field
-                  label="Escopo do Atendimento"
-                  req
-                  hint="As opções dependem da solicitação escolhida."
+              <span className="modalidade-tag">Em breve</span>
+              <h2>Solicitação de Geração Distribuída</h2>
+              <p>Microgeração / minigeração distribuída. Em desenvolvimento.</p>
+            </button>
+          </div>
+        </div>
+      ) : modalidade !== "BT" ? (
+        <div className="modalidade-soon">
+          <h1>
+            {modalidade === "MT"
+              ? "Atendimento em Média Tensão"
+              : "Solicitação de Geração Distribuída"}
+          </h1>
+          <p>
+            Esta modalidade ainda está em desenvolvimento e será disponibilizada
+            em breve.
+          </p>
+          <Btn variant="primary" onClick={() => setModalidade(null)}>
+            ← Voltar à seleção
+          </Btn>
+        </div>
+      ) : (
+        <React.Fragment>
+          <div className="form-header">
+            <h1>
+              Formulário de Orçamento de Conexão / Alteração de Carga em Baixa
+              Tensão
+            </h1>
+            <p>
+              Preenchimento digital unificado para solicitações em BT, conforme
+              as normas CEMIG ND-5.1 / ND-5.2 e a REN ANEEL nº 1.000/2021.
+            </p>
+            <span className="flow-badge">
+              {multiTorres
+                ? "Múltiplas Torres / Blocos"
+                : coletivo
+                  ? "Coletivo — Proteção Geral"
+                  : "Individual / até 3 caixas"}{" "}
+              · Demanda {fmt2(demandaTotalGeral)} kVA
+            </span>
+          </div>
+
+          <div className="layout">
+            <aside className="sidebar">
+              <div className="sidebar-title">Progresso do preenchimento</div>
+              {abas.map((a, i) => (
+                <button
+                  key={a.k}
+                  className={
+                    "vstep" + (a.k === aba ? " active" : i < idx ? " done" : "")
+                  }
+                  onClick={() => setAba(a.k)}
                 >
-                  <Sel
-                    value={atend.escopo}
-                    onChange={(e) =>
-                      setAtend({ ...atend, escopo: e.target.value })
-                    }
+                  <span className="vstep-num">{i === 0 ? "i" : i}</span>
+                  <span className="vstep-label">{a.l}</span>
+                </button>
+              ))}
+            </aside>
+
+            <main className="main-col fade-in" key={aba}>
+              {/* ===== ORIENTAÇÕES ===== */}
+              {aba === "orient" && (
+                <Card
+                  eyebrow="Comece por aqui"
+                  title="Orientações para preenchimento"
+                  sub={ORIENTACOES.intro}
+                >
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      color: "var(--verde-escuro)",
+                      fontSize: 14,
+                      marginBottom: 4,
+                    }}
                   >
-                    {(ESCOPOS[atend.solicitacao] || []).map((s) => (
-                      <option key={s}>{s}</option>
+                    {ORIENTACOES.geral.titulo}
+                  </div>
+                  <ul className="orient-list">
+                    {ORIENTACOES.geral.itens.map((it, i) => (
+                      <li key={i} className="orient-item">
+                        <span className="orient-num">{i + 1}</span>
+                        <p>{it}</p>
+                      </li>
                     ))}
-                  </Sel>
-                </Field>
-                {multiTorres && (
-                  <React.Fragment>
-                    <Field label="Atendimento a">
+                  </ul>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      color: "var(--verde-escuro)",
+                      fontSize: 14,
+                      margin: "18px 0 4px",
+                    }}
+                  >
+                    {ORIENTACOES.individual.titulo}
+                  </div>
+                  <ul className="orient-list">
+                    {ORIENTACOES.individual.itens.map((it, i) => (
+                      <li key={i} className="orient-item">
+                        <span className="orient-num">{i + 1}</span>
+                        <p>{it}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      color: "var(--verde-escuro)",
+                      fontSize: 14,
+                      margin: "18px 0 4px",
+                    }}
+                  >
+                    {ORIENTACOES.coletivo.titulo}
+                  </div>
+                  <ul className="orient-list">
+                    {ORIENTACOES.coletivo.itens.map((it, i) => (
+                      <li key={i} className="orient-item">
+                        <span className="orient-num">{i + 1}</span>
+                        <p>{it}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="callout">{ORIENTACOES.callout}</div>
+                  <div className="legend">
+                    <span>
+                      <span className="req">*</span> Campo de preenchimento
+                      obrigatório
+                    </span>
+                    <span>
+                      <span className="req">**</span> Obrigatório para pessoa
+                      física
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 16 }}>
+                    <Btn variant="primary" onClick={irProx}>
+                      Iniciar preenchimento →
+                    </Btn>
+                  </div>
+                </Card>
+              )}
+
+              {/* ===== TIPO DE ATENDIMENTO ===== */}
+              {aba === "tipo" && (
+                <Card
+                  eyebrow="Etapa 1"
+                  title="Tipo de Atendimento"
+                  sub="O tipo de formulário é definido pela presença ou não de disjuntor geral. Os campos seguintes se adaptam à sua escolha."
+                >
+                  <div className="grid grid-2 divider">
+                    <Field label="Solicitação" req>
+                      <Sel
+                        value={atend.solicitacao}
+                        onChange={(e) =>
+                          setAtend({ ...atend, solicitacao: e.target.value })
+                        }
+                      >
+                        {SOLICITACOES.map((s) => (
+                          <option key={s}>{s}</option>
+                        ))}
+                      </Sel>
+                    </Field>
+                    <Field
+                      label="Escopo do Atendimento"
+                      req
+                      hint="As opções dependem da solicitação escolhida."
+                    >
+                      <Sel
+                        value={atend.escopo}
+                        onChange={(e) =>
+                          setAtend({ ...atend, escopo: e.target.value })
+                        }
+                      >
+                        {(ESCOPOS[atend.solicitacao] || []).map((s) => (
+                          <option key={s}>{s}</option>
+                        ))}
+                      </Sel>
+                    </Field>
+                    {multiTorres && (
+                      <React.Fragment>
+                        <Field label="Atendimento a">
+                          <Toggle
+                            value={atend.atendA}
+                            onChange={(v) => setAtend({ ...atend, atendA: v })}
+                            options={[
+                              { v: "Bloco", l: "Bloco" },
+                              { v: "Torre", l: "Torre" },
+                            ]}
+                          />
+                        </Field>
+                        <Field
+                          label="Nº de Blocos / Torres"
+                          req
+                          hint="Cada bloco terá disjuntor geral próprio e disjuntor de combate a incêndio."
+                        >
+                          <Inp
+                            type="number"
+                            value={atend.nBlocos}
+                            onChange={(e) =>
+                              setAtend({
+                                ...atend,
+                                nBlocos: Math.max(1, parseInt(e.target.value)),
+                              })
+                            }
+                          />
+                        </Field>
+                      </React.Fragment>
+                    )}
+                  </div>
+
+                  <div className="grid grid-2">
+                    <Field label="Possui disjuntor geral (proteção geral)?" req>
                       <Toggle
-                        value={atend.atendA}
-                        onChange={(v) => setAtend({ ...atend, atendA: v })}
+                        value={atend.disjGeral}
+                        onChange={(v) => setAtend({ ...atend, disjGeral: v })}
                         options={[
-                          { v: "Bloco", l: "Bloco" },
-                          { v: "Torre", l: "Torre" },
+                          { v: "Não", l: "Não" },
+                          { v: "Sim", l: "Sim" },
+                        ]}
+                      />
+                    </Field>
+                    {!multiTorres && (
+                      <Field
+                        label="Nº de Unidades Consumidoras"
+                        req
+                        hint={
+                          coletivo
+                            ? "Será gerado um bloco de identificação para cada UC."
+                            : "Individual: até 3 caixas. Cada UC terá identificação e detalhamento de cargas."
+                        }
+                      >
+                        <Inp
+                          type="number"
+                          value={atend.nUCs}
+                          onChange={(e) =>
+                            setAtend({
+                              ...atend,
+                              nUCs: Math.max(1, parseInt(e.target.value)),
+                              disjGeral:
+                                parseInt(e.target.value) > 3 ? "Sim" : "Não",
+                            })
+                          }
+                          options={[
+                            { v: true, l: "Sim" },
+                            { v: false, l: "Não" },
+                          ]}
+                        />
+                      </Field>
+                    )}
+                  </div>
+
+                  <div className="grid grid-2 divider">
+                    <Field label="Há múltiplas unidades consumidoras com proteção acima de 63 A?">
+                      <Toggle
+                        value={atend.biAcima63}
+                        onChange={(v) =>
+                          setAtend({
+                            ...atend,
+                            biAcima63: v,
+                            triAcima63: v,
+                            disjGeral: v ? "Sim" : "Não", // converte booleano para string
+                          })
+                        }
+                        options={[
+                          { v: true, l: "Sim" },
+                          { v: false, l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                  </div>
+
+                  <div
+                    className={
+                      "alert " + (coletivo ? "alert-ok" : "alert-info")
+                    }
+                    style={{ marginTop: 16 }}
+                  >
+                    {multiTorres
+                      ? "Atendimento caracterizado como empreendimento com 'Múltiplas Torres ou Blocos'."
+                      : coletivo
+                        ? "Atendimento caracterizado como 'Coletivo'."
+                        : "Atendimento caracterizado como 'Individual'."}
+                  </div>
+                </Card>
+              )}
+
+              {/* ===== PROPRIETÁRIO ===== */}
+              {aba === "prop" && (
+                <Card
+                  eyebrow="Dados"
+                  title="Dados do Proprietário"
+                  sub="Titular da conta de energia ou proprietário/possuidor do imóvel. (*) obrigatório · (**) obrigatório para pessoa física."
+                >
+                  <div className="grid grid-2">
+                    <Field label="Nome Completo (sem abreviações)" req span={2}>
+                      <Inp
+                        value={prop.nome}
+                        onChange={(e) =>
+                          setProp({ ...prop, nome: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="CPF / CNPJ"
+                      req
+                      hint={
+                        docInfo.valido === false
+                          ? `${docInfo.tipo} inválido — verifique os dígitos.`
+                          : docInfo.valido === true
+                            ? `${docInfo.tipo} válido.`
+                            : "Digite CPF (pessoa física) ou CNPJ (pessoa jurídica)."
+                      }
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "center",
+                        }}
+                      >
+                        <input
+                          value={prop.cpfCnpj || ""}
+                          onChange={(e) => {
+                            const m = mascararCpfCnpj(e.target.value);
+                            setProp({ ...prop, cpfCnpj: m });
+                            if (ehCNPJ(m)) buscarCNPJ(m);
+                            else setCnpjStatus("");
+                          }}
+                          placeholder="000.000.000-00"
+                          style={{
+                            borderColor:
+                              docInfo.valido === false
+                                ? "var(--vermelho)"
+                                : undefined,
+                          }}
+                        />
+                        {cnpjStatus === "buscando" && (
+                          <span className="spinner"></span>
+                        )}
+                        {cnpjStatus === "ok" && (
+                          <Badge>dados preenchidos</Badge>
+                        )}
+                        {cnpjStatus === "erro" && (
+                          <span
+                            style={{ color: "var(--vermelho)", fontSize: 12 }}
+                          >
+                            CNPJ não encontrado
+                          </span>
+                        )}
+                      </div>
+                    </Field>
+                    <Field label="E-mail" req>
+                      <Inp
+                        type="email"
+                        value={prop.email}
+                        onChange={(e) =>
+                          setProp({ ...prop, email: e.target.value })
+                        }
+                      />
+                    </Field>
+                    {pessoaFisica && (
+                      <Field label="Filiação (Mãe ou Pai) **">
+                        <Inp
+                          value={prop.filiacao}
+                          onChange={(e) =>
+                            setProp({ ...prop, filiacao: e.target.value })
+                          }
+                        />
+                      </Field>
+                    )}
+                    {pessoaFisica && (
+                      <Field label="RG / RNE / RANI **">
+                        <Inp
+                          value={prop.rg}
+                          onChange={(e) =>
+                            setProp({ ...prop, rg: mascararRG(e.target.value) })
+                          }
+                        />
+                      </Field>
+                    )}
+                    {pessoaFisica && (
+                      <Field label="Data de Nascimento **">
+                        <Inp
+                          type="date"
+                          value={prop.nasc}
+                          onChange={(e) =>
+                            setProp({ ...prop, nasc: e.target.value })
+                          }
+                        />
+                      </Field>
+                    )}
+                    <Field label="Celular" req>
+                      <Inp
+                        value={prop.celular}
+                        onChange={(e) =>
+                          setProp({
+                            ...prop,
+                            celular: mascararCelular(e.target.value),
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Telefone Fixo">
+                      <Inp
+                        value={prop.fixo}
+                        onChange={(e) =>
+                          setProp({
+                            ...prop,
+                            fixo: mascararFixo(e.target.value),
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Telefone do Proprietário" req>
+                      <Inp
+                        value={prop.telProp}
+                        onChange={(e) =>
+                          setProp({
+                            ...prop,
+                            telProp: mascararTelefone(e.target.value),
+                          })
+                        }
+                      />
+                    </Field>
+                    {pessoaFisica && (
+                      <Field
+                        label="Possui laudo médico (equipamentos essenciais)? **"
+                        span={2}
+                      >
+                        <Toggle
+                          value={prop.laudoMedico}
+                          onChange={(v) => setProp({ ...prop, laudoMedico: v })}
+                          options={[
+                            { v: "Sim", l: "Sim" },
+                            { v: "Não", l: "Não" },
+                          ]}
+                        />
+                      </Field>
+                    )}
+                    {pessoaFisica && (
+                      <Field label="Possui NIS para Tarifa Social? **">
+                        <Toggle
+                          value={prop.nis}
+                          onChange={(v) => setProp({ ...prop, nis: v })}
+                          options={[
+                            { v: "Sim", l: "Sim" },
+                            { v: "Não", l: "Não" },
+                          ]}
+                        />
+                      </Field>
+                    )}
+                    {pessoaFisica && prop.nis === "Sim" && (
+                      <Field label="Número do NIS" req>
+                        <Inp
+                          value={prop.numNis}
+                          onChange={(e) =>
+                            setProp({ ...prop, numNis: e.target.value })
+                          }
+                        />
+                      </Field>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {/* ===== CORRESPONDÊNCIA ===== */}
+              {aba === "corr" && (
+                <Card
+                  eyebrow="Dados"
+                  title="Correspondência e Fatura"
+                  sub="Como o cliente deseja receber a conta de energia."
+                >
+                  <div className="grid grid-2">
+                    <Field
+                      label="Deseja receber a fatura no e-mail informado?"
+                      req
+                    >
+                      <Toggle
+                        value={corr.receberEmail}
+                        onChange={(v) => setCorr({ ...corr, receberEmail: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="Data de Vencimento da Fatura">
+                      <Toggle
+                        value={corr.vencimento}
+                        onChange={(v) => setCorr({ ...corr, vencimento: v })}
+                        options={DIAS_VENCIMENTO.map((d) => ({ v: d, l: d }))}
+                      />
+                    </Field>
+                  </div>
+                  {corr.receberEmail === "Não" && (
+                    <div className="grid grid-2 divider">
+                      <Field label="CEP" span={2}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={{ maxWidth: 180 }}>
+                            <Inp
+                              value={corr.cep}
+                              onChange={(e) => {
+                                const v = mascararCEP(e.target.value);
+                                setCorr({ ...corr, cep: v });
+                                buscarCEP(v, "corr");
+                              }}
+                              placeholder="00000-000"
+                            />
+                          </div>
+                          {cepStatus.corr === "buscando" && (
+                            <span className="spinner"></span>
+                          )}
+                          {cepStatus.corr === "ok" && (
+                            <Badge>Endereço encontrado</Badge>
+                          )}
+                          {cepStatus.corr === "erro" && (
+                            <span
+                              style={{ color: "var(--vermelho)", fontSize: 12 }}
+                            >
+                              CEP não encontrado
+                            </span>
+                          )}
+                        </div>
+                      </Field>
+                      <Field label="Rua / Av." span={2}>
+                        <Inp
+                          value={corr.rua}
+                          onChange={(e) =>
+                            setCorr({ ...corr, rua: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nº">
+                        <Inp
+                          value={corr.num}
+                          onChange={(e) =>
+                            setCorr({ ...corr, num: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Complemento">
+                        <Inp
+                          value={corr.compl}
+                          onChange={(e) =>
+                            setCorr({ ...corr, compl: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Bairro / Distrito">
+                        <Inp
+                          value={corr.bairro}
+                          onChange={(e) =>
+                            setCorr({ ...corr, bairro: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Município">
+                        <Inp
+                          value={corr.municipio}
+                          onChange={(e) =>
+                            setCorr({ ...corr, municipio: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Estado">
+                        <Inp
+                          value={corr.estado}
+                          onChange={(e) =>
+                            setCorr({ ...corr, estado: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+                  )}
+                  <div style={{ marginTop: 14 }}>
+                    <Field label="Conta globalizada (poder público — código de débito automático globalizado)">
+                      <Inp
+                        value={corr.contaGlobal}
+                        onChange={(e) =>
+                          setCorr({ ...corr, contaGlobal: e.target.value })
+                        }
+                        placeholder="Opcional"
+                      />
+                    </Field>
+                  </div>
+                </Card>
+              )}
+
+              {/* ===== OBRA ===== */}
+              {aba === "obra" && (
+                <Card
+                  eyebrow="Dados"
+                  title="Dados da Obra"
+                  sub="Endereço do padrão de entrada / ponto de entrega."
+                >
+                  <div className="grid grid-2">
+                    <Field label="Zona de localização" req>
+                      <Toggle
+                        value={obra.localizacao}
+                        onChange={(v) => setObra({ ...obra, localizacao: v })}
+                        options={[
+                          { v: "Urbana", l: "Urbana" },
+                          { v: "Rural", l: "Rural" },
+                        ]}
+                      />
+                    </Field>
+                    {coletivo && (
+                      <Field
+                        label="Nº ART/TRT de Projeto"
+                        req
+                        hint="Obrigatório para atendimentos via APR Web."
+                      >
+                        <Inp
+                          value={obra.art}
+                          onChange={(e) =>
+                            setObra({ ...obra, art: e.target.value })
+                          }
+                        />
+                      </Field>
+                    )}
+                  </div>
+                  {obra.localizacao === "Urbana" && (
+                    <div className="grid grid-2" style={{ marginTop: 14 }}>
+                      <Field label="CEP" req span={2}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={{ maxWidth: 180 }}>
+                            <Inp
+                              value={obra.cep}
+                              onChange={(e) => {
+                                const v = mascararCEP(e.target.value);
+                                setObra({ ...obra, cep: v });
+                                buscarCEP(v, "obra");
+                              }}
+                              placeholder="00000-000"
+                            />
+                          </div>
+                          {cepStatus.obra === "buscando" && (
+                            <span className="spinner"></span>
+                          )}
+                          {cepStatus.obra === "ok" && (
+                            <Badge>Endereço encontrado</Badge>
+                          )}
+                          {cepStatus.obra === "erro" && (
+                            <span
+                              style={{ color: "var(--vermelho)", fontSize: 12 }}
+                            >
+                              CEP não encontrado
+                            </span>
+                          )}
+                        </div>
+                      </Field>
+                      <Field label="Endereço" req span={2}>
+                        <Inp
+                          value={obra.endereco}
+                          onChange={(e) =>
+                            setObra({ ...obra, endereco: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nº" req>
+                        <Inp
+                          value={obra.num}
+                          onChange={(e) =>
+                            setObra({ ...obra, num: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Complemento">
+                        <Inp
+                          value={obra.compl}
+                          onChange={(e) =>
+                            setObra({ ...obra, compl: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Bairro" req>
+                        <Inp
+                          value={obra.bairro}
+                          onChange={(e) =>
+                            setObra({ ...obra, bairro: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Cidade / Município" req>
+                        <Inp
+                          value={obra.cidade}
+                          onChange={(e) =>
+                            setObra({ ...obra, cidade: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Estado" req>
+                        <Inp
+                          value={obra.estado}
+                          onChange={(e) =>
+                            setObra({ ...obra, estado: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+                  )}
+                  {obra.localizacao === "Rural" && (
+                    <div className="grid grid-2" style={{ marginTop: 14 }}>
+                      <Field label="Município" req>
+                        <Inp
+                          value={obra.cidade}
+                          onChange={(e) =>
+                            setObra({ ...obra, cidade: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Estado" req>
+                        <Inp
+                          value={obra.estado}
+                          onChange={(e) =>
+                            setObra({ ...obra, estado: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Distrito / Comunidade / Região">
+                        <Inp
+                          value={obra.distritoComunidade}
+                          onChange={(e) =>
+                            setObra({
+                              ...obra,
+                              distritoComunidade: e.target.value,
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nome da propriedade">
+                        <Inp
+                          value={obra.nomePropriedade}
+                          onChange={(e) =>
+                            setObra({
+                              ...obra,
+                              nomePropriedade: e.target.value,
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Ponto de referência">
+                        <Inp
+                          value={obra.pontoRef}
+                          onChange={(e) =>
+                            setObra({ ...obra, pontoRef: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nº instalação mais próxima">
+                        <Inp
+                          value={obra.instProxima}
+                          onChange={(e) =>
+                            setObra({ ...obra, instProxima: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
+                  )}
+                  <div className="grid grid-2 divider">
+                    <Field label="Distância padrão→rede CEMIG inferior a 30 m?">
+                      <Toggle
+                        value={obra.distMenor30}
+                        onChange={(v) => setObra({ ...obra, distMenor30: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
                         ]}
                       />
                     </Field>
                     <Field
-                      label="Nº de Blocos / Torres"
-                      req
-                      hint="Cada bloco terá disjuntor geral próprio e disjuntor de combate a incêndio."
+                      label={
+                        coordObrigatoria
+                          ? "Coordenada (lat, long)"
+                          : "Coordenada (lat, long) — opcional"
+                      }
+                      req={coordObrigatoria}
+                      hint="Ex: -19.9123, -43.9385"
                     >
                       <Inp
-                        type="number"
-                        value={atend.nBlocos}
+                        value={obra.coordenada}
                         onChange={(e) =>
-                          setAtend({
-                            ...atend,
-                            nBlocos: Math.max(1, parseInt(e.target.value)),
-                          })
+                          setObra({ ...obra, coordenada: e.target.value })
+                        }
+                        placeholder="-19.9123, -43.9385"
+                      />
+                    </Field>
+                  </div>
+                  {coordObrigatoria && !coordPreenchida && (
+                    <div className="alert alert-warn" style={{ marginTop: 8 }}>
+                      ⚠ Em área rural com distância superior a 30 m da rede
+                      CEMIG, a coordenada é obrigatória para localização da
+                      propriedade.
+                    </div>
+                  )}
+                  <div className="grid grid-2 divider">
+                    <Field label="O padrão está pronto para ser ligado?" req>
+                      <Toggle
+                        value={obra.prontoLigar}
+                        onChange={(v) => setObra({ ...obra, prontoLigar: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="UC em Área de Preservação Permanente (APP)?">
+                      <Toggle
+                        value={obra.app}
+                        onChange={(v) => setObra({ ...obra, app: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="UC em Reserva Legal?">
+                      <Toggle
+                        value={obra.reservaLegal}
+                        onChange={(v) => setObra({ ...obra, reservaLegal: v })}
+                        options={[
+                          { v: "Sim", l: "Sim" },
+                          { v: "Não", l: "Não" },
+                        ]}
+                      />
+                    </Field>
+                    <Field label="Tipo de rede BT que atende o local">
+                      <Sel
+                        value={obra.tipoRede}
+                        onChange={(e) =>
+                          setObra({ ...obra, tipoRede: e.target.value })
+                        }
+                      >
+                        <option>Monofásica</option>
+                        <option>Bifásica</option>
+                        <option>Trifásica</option>
+                      </Sel>
+                    </Field>
+                    <Field label="Código do transformador mais próximo">
+                      <Inp
+                        value={obra.transformador}
+                        onChange={(e) =>
+                          setObra({ ...obra, transformador: e.target.value })
                         }
                       />
                     </Field>
-                  </React.Fragment>
-                )}
-              </div>
-
-              <div className="grid grid-2">
-                <Field label="Possui disjuntor geral (proteção geral)?" req>
-                  <Toggle
-                    value={atend.disjGeral}
-                    onChange={(v) => setAtend({ ...atend, disjGeral: v })}
-                    options={[
-                      { v: "Não", l: "Não" },
-                      { v: "Sim", l: "Sim" },
-                    ]}
-                  />
-                </Field>
-                {!multiTorres && (
-                  <Field
-                    label="Nº de Unidades Consumidoras"
-                    req
-                    hint={
-                      coletivo
-                        ? "Será gerado um bloco de identificação para cada UC."
-                        : "Individual: até 3 caixas. Cada UC terá identificação e detalhamento de cargas."
-                    }
-                  >
-                    <Inp
-                      type="number"
-                      value={atend.nUCs}
-                      onChange={(e) =>
-                        setAtend({
-                          ...atend,
-                          nUCs: Math.max(1, parseInt(e.target.value)),
-                          disjGeral:
-                            parseInt(e.target.value) > 3 ? "Sim" : "Não",
-                        })
-                      }
-                      options={[
-                        { v: true, l: "Sim" },
-                        { v: false, l: "Não" },
-                      ]}
-                    />
-                  </Field>
-                )}
-              </div>
-
-              <div className="grid grid-2 divider">
-                <Field label="Há múltiplas unidades consumidoras com proteção acima de 63 A?">
-                  <Toggle
-                    value={atend.biAcima63}
-                    onChange={(v) =>
-                      setAtend({
-                        ...atend,
-                        biAcima63: v,
-                        triAcima63: v,
-                        disjGeral: v ? "Sim" : "Não", // converte booleano para string
-                      })
-                    }
-                    options={[
-                      { v: true, l: "Sim" },
-                      { v: false, l: "Não" },
-                    ]}
-                  />
-                </Field>
-              </div>
-
-              {disjGeralObrigatorio && !multiTorres && (
-                <div className="geral-box">
-                  <Field
-                    label="Disjuntor geral do agrupamento"
-                    req
-                    hint={`Obrigatório quando houver mais de três unidades consumidoras mono ou bipolares com proteção superior a 63 A, ou quando existirem duas ou mais unidades consumidoras com disjuntor trifásico. Opções acima da maior faixa das UCs (${maiorCorrenteUC || "—"} A).`}
-                  >
-                    <Sel
-                      value={atend.disjuntorGeral}
-                      onChange={(e) =>
-                        setAtend({ ...atend, disjuntorGeral: e.target.value })
-                      }
-                    >
-                      <option value="">Selecione…</option>
-                      {opcoesDisjGeral.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </Sel>
-                  </Field>
-                  {opcoesDisjGeral.length === 0 && (
-                    <div className="alert alert-info" style={{ marginTop: 10 }}>
-                      Defina os disjuntores das unidades consumidoras para
-                      liberar as opções de disjuntor geral.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div
-                className={"alert " + (coletivo ? "alert-ok" : "alert-info")}
-                style={{ marginTop: 16 }}
-              >
-                {multiTorres
-                  ? "Atendimento caracterizado como empreendimento com 'Múltiplas Torres ou Blocos'."
-                  : coletivo
-                    ? "Atendimento caracterizado como 'Coletivo'."
-                    : "Atendimento caracterizado como 'Individual'."}
-              </div>
-            </Card>
-          )}
-
-          {/* ===== PROPRIETÁRIO ===== */}
-          {aba === "prop" && (
-            <Card
-              eyebrow="Dados"
-              title="Dados do Proprietário"
-              sub="Titular da conta de energia ou proprietário/possuidor do imóvel. (*) obrigatório · (**) obrigatório para pessoa física."
-            >
-              <div className="grid grid-2">
-                <Field label="Nome Completo (sem abreviações)" req span={2}>
-                  <Inp
-                    value={prop.nome}
-                    onChange={(e) => setProp({ ...prop, nome: e.target.value })}
-                  />
-                </Field>
-                <Field
-                  label="CPF / CNPJ"
-                  req
-                  hint={
-                    docInfo.valido === false
-                      ? `${docInfo.tipo} inválido — verifique os dígitos.`
-                      : docInfo.valido === true
-                        ? `${docInfo.tipo} válido.`
-                        : "Digite CPF (pessoa física) ou CNPJ (pessoa jurídica)."
-                  }
-                >
-                  <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
-                  >
-                    <input
-                      value={prop.cpfCnpj || ""}
-                      onChange={(e) => {
-                        const m = mascararCpfCnpj(e.target.value);
-                        setProp({ ...prop, cpfCnpj: m });
-                        if (ehCNPJ(m)) buscarCNPJ(m);
-                        else setCnpjStatus("");
-                      }}
-                      placeholder="000.000.000-00"
-                      style={{
-                        borderColor:
-                          docInfo.valido === false
-                            ? "var(--vermelho)"
-                            : undefined,
-                      }}
-                    />
-                    {cnpjStatus === "buscando" && (
-                      <span className="spinner"></span>
-                    )}
-                    {cnpjStatus === "ok" && <Badge>dados preenchidos</Badge>}
-                    {cnpjStatus === "erro" && (
-                      <span style={{ color: "var(--vermelho)", fontSize: 12 }}>
-                        CNPJ não encontrado
-                      </span>
-                    )}
                   </div>
-                </Field>
-                <Field label="E-mail" req>
-                  <Inp
-                    type="email"
-                    value={prop.email}
-                    onChange={(e) =>
-                      setProp({ ...prop, email: e.target.value })
-                    }
-                  />
-                </Field>
-                {pessoaFisica && (
-                  <Field label="Filiação (Mãe ou Pai) **">
-                    <Inp
-                      value={prop.filiacao}
-                      onChange={(e) =>
-                        setProp({ ...prop, filiacao: e.target.value })
-                      }
-                    />
-                  </Field>
-                )}
-                {pessoaFisica && (
-                  <Field label="RG / RNE / RANI **">
-                    <Inp
-                      value={prop.rg}
-                      onChange={(e) =>
-                        setProp({ ...prop, rg: mascararRG(e.target.value) })
-                      }
-                    />
-                  </Field>
-                )}
-                {pessoaFisica && (
-                  <Field label="Data de Nascimento **">
-                    <Inp
-                      type="date"
-                      value={prop.nasc}
-                      onChange={(e) =>
-                        setProp({ ...prop, nasc: e.target.value })
-                      }
-                    />
-                  </Field>
-                )}
-                <Field label="Celular" req>
-                  <Inp
-                    value={prop.celular}
-                    onChange={(e) =>
-                      setProp({
-                        ...prop,
-                        celular: mascararCelular(e.target.value),
-                      })
-                    }
-                  />
-                </Field>
-                <Field label="Telefone Fixo">
-                  <Inp
-                    value={prop.fixo}
-                    onChange={(e) =>
-                      setProp({ ...prop, fixo: mascararFixo(e.target.value) })
-                    }
-                  />
-                </Field>
-                <Field label="Telefone do Proprietário" req>
-                  <Inp
-                    value={prop.telProp}
-                    onChange={(e) =>
-                      setProp({
-                        ...prop,
-                        telProp: mascararTelefone(e.target.value),
-                      })
-                    }
-                  />
-                </Field>
-                {pessoaFisica && (
-                  <Field
-                    label="Possui laudo médico (equipamentos essenciais)? **"
-                    span={2}
-                  >
-                    <Toggle
-                      value={prop.laudoMedico}
-                      onChange={(v) => setProp({ ...prop, laudoMedico: v })}
-                      options={[
-                        { v: "Sim", l: "Sim" },
-                        { v: "Não", l: "Não" },
-                      ]}
-                    />
-                  </Field>
-                )}
-                {pessoaFisica && (
-                  <Field label="Possui NIS para Tarifa Social? **">
-                    <Toggle
-                      value={prop.nis}
-                      onChange={(v) => setProp({ ...prop, nis: v })}
-                      options={[
-                        { v: "Sim", l: "Sim" },
-                        { v: "Não", l: "Não" },
-                      ]}
-                    />
-                  </Field>
-                )}
-                {pessoaFisica && prop.nis === "Sim" && (
-                  <Field label="Número do NIS" req>
-                    <Inp
-                      value={prop.numNis}
-                      onChange={(e) =>
-                        setProp({ ...prop, numNis: e.target.value })
-                      }
-                    />
-                  </Field>
-                )}
-              </div>
-            </Card>
-          )}
-
-          {/* ===== CORRESPONDÊNCIA ===== */}
-          {aba === "corr" && (
-            <Card
-              eyebrow="Dados"
-              title="Correspondência e Fatura"
-              sub="Como o cliente deseja receber a conta de energia."
-            >
-              <div className="grid grid-2">
-                <Field label="Deseja receber a fatura no e-mail informado?" req>
-                  <Toggle
-                    value={corr.receberEmail}
-                    onChange={(v) => setCorr({ ...corr, receberEmail: v })}
-                    options={[
-                      { v: "Sim", l: "Sim" },
-                      { v: "Não", l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field label="Data de Vencimento da Fatura">
-                  <Toggle
-                    value={corr.vencimento}
-                    onChange={(v) => setCorr({ ...corr, vencimento: v })}
-                    options={DIAS_VENCIMENTO.map((d) => ({ v: d, l: d }))}
-                  />
-                </Field>
-              </div>
-              {corr.receberEmail === "Não" && (
-                <div className="grid grid-2 divider">
-                  <Field label="CEP" span={2}>
-                    <div
-                      style={{ display: "flex", gap: 8, alignItems: "center" }}
-                    >
-                      <div style={{ maxWidth: 180 }}>
-                        <Inp
-                          value={corr.cep}
-                          onChange={(e) => {
-                            const v = mascararCEP(e.target.value);
-                            setCorr({ ...corr, cep: v });
-                            buscarCEP(v, "corr");
-                          }}
-                          placeholder="00000-000"
-                        />
-                      </div>
-                      {cepStatus.corr === "buscando" && (
-                        <span className="spinner"></span>
-                      )}
-                      {cepStatus.corr === "ok" && (
-                        <Badge>Endereço encontrado</Badge>
-                      )}
-                      {cepStatus.corr === "erro" && (
-                        <span
-                          style={{ color: "var(--vermelho)", fontSize: 12 }}
-                        >
-                          CEP não encontrado
-                        </span>
-                      )}
-                    </div>
-                  </Field>
-                  <Field label="Rua / Av." span={2}>
-                    <Inp
-                      value={corr.rua}
-                      onChange={(e) =>
-                        setCorr({ ...corr, rua: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Nº">
-                    <Inp
-                      value={corr.num}
-                      onChange={(e) =>
-                        setCorr({ ...corr, num: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Complemento">
-                    <Inp
-                      value={corr.compl}
-                      onChange={(e) =>
-                        setCorr({ ...corr, compl: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Bairro / Distrito">
-                    <Inp
-                      value={corr.bairro}
-                      onChange={(e) =>
-                        setCorr({ ...corr, bairro: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Município">
-                    <Inp
-                      value={corr.municipio}
-                      onChange={(e) =>
-                        setCorr({ ...corr, municipio: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Estado">
-                    <Inp
-                      value={corr.estado}
-                      onChange={(e) =>
-                        setCorr({ ...corr, estado: e.target.value })
-                      }
-                    />
-                  </Field>
-                </div>
+                </Card>
               )}
-              <div style={{ marginTop: 14 }}>
-                <Field label="Conta globalizada (poder público — código de débito automático globalizado)">
-                  <Inp
-                    value={corr.contaGlobal}
-                    onChange={(e) =>
-                      setCorr({ ...corr, contaGlobal: e.target.value })
-                    }
-                    placeholder="Opcional"
-                  />
-                </Field>
-              </div>
-            </Card>
-          )}
 
-          {/* ===== OBRA ===== */}
-          {aba === "obra" && (
-            <Card
-              eyebrow="Dados"
-              title="Dados da Obra"
-              sub="Endereço do padrão de entrada / ponto de entrega."
-            >
-              <div className="grid grid-2">
-                <Field label="Zona de localização" req>
-                  <Toggle
-                    value={obra.localizacao}
-                    onChange={(v) => setObra({ ...obra, localizacao: v })}
-                    options={[
-                      { v: "Urbana", l: "Urbana" },
-                      { v: "Rural", l: "Rural" },
-                    ]}
-                  />
-                </Field>
-                {coletivo && (
-                  <Field
-                    label="Nº ART/TRT de Projeto"
-                    req
-                    hint="Obrigatório para atendimentos via APR Web."
+              {/* ===== TORRES / BLOCOS (múltiplas torres, preenchimento em massa) ===== */}
+              {aba === "blocos" && multiTorres && (
+                <div>
+                  <Card
+                    eyebrow="Empreendimento"
+                    title="Atendimento a Empreendimento com Múltiplas Torres ou Blocos"
+                    sub={`Cada ${atend.atendA.toLowerCase()} pode ter seu disjuntor geral e seu disjuntor de combate a incêndio. Preencha o primeiro e use "Replicar" para preenchimento em massa.`}
                   >
-                    <Inp
-                      value={obra.art}
-                      onChange={(e) =>
-                        setObra({ ...obra, art: e.target.value })
-                      }
-                    />
-                  </Field>
-                )}
-              </div>
-              {obra.localizacao === "Urbana" && (
-                <div className="grid grid-2" style={{ marginTop: 14 }}>
-                  <Field label="CEP" req span={2}>
-                    <div
-                      style={{ display: "flex", gap: 8, alignItems: "center" }}
-                    >
-                      <div style={{ maxWidth: 180 }}>
-                        <Inp
-                          value={obra.cep}
-                          onChange={(e) => {
-                            const v = mascararCEP(e.target.value);
-                            setObra({ ...obra, cep: v });
-                            buscarCEP(v, "obra");
-                          }}
-                          placeholder="00000-000"
-                        />
-                      </div>
-                      {cepStatus.obra === "buscando" && (
-                        <span className="spinner"></span>
-                      )}
-                      {cepStatus.obra === "ok" && (
-                        <Badge>Endereço encontrado</Badge>
-                      )}
-                      {cepStatus.obra === "erro" && (
-                        <span
-                          style={{ color: "var(--vermelho)", fontSize: 12 }}
-                        >
-                          CEP não encontrado
-                        </span>
-                      )}
-                    </div>
-                  </Field>
-                  <Field label="Endereço" req span={2}>
-                    <Inp
-                      value={obra.endereco}
-                      onChange={(e) =>
-                        setObra({ ...obra, endereco: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Nº" req>
-                    <Inp
-                      value={obra.num}
-                      onChange={(e) =>
-                        setObra({ ...obra, num: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Complemento">
-                    <Inp
-                      value={obra.compl}
-                      onChange={(e) =>
-                        setObra({ ...obra, compl: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Bairro" req>
-                    <Inp
-                      value={obra.bairro}
-                      onChange={(e) =>
-                        setObra({ ...obra, bairro: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Cidade / Município" req>
-                    <Inp
-                      value={obra.cidade}
-                      onChange={(e) =>
-                        setObra({ ...obra, cidade: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Estado" req>
-                    <Inp
-                      value={obra.estado}
-                      onChange={(e) =>
-                        setObra({ ...obra, estado: e.target.value })
-                      }
-                    />
-                  </Field>
-                </div>
-              )}
-              {obra.localizacao === "Rural" && (
-                <div className="grid grid-2" style={{ marginTop: 14 }}>
-                  <Field label="Município" req>
-                    <Inp
-                      value={obra.cidade}
-                      onChange={(e) =>
-                        setObra({ ...obra, cidade: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Estado" req>
-                    <Inp
-                      value={obra.estado}
-                      onChange={(e) =>
-                        setObra({ ...obra, estado: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Distrito / Comunidade / Região">
-                    <Inp
-                      value={obra.distritoComunidade}
-                      onChange={(e) =>
-                        setObra({ ...obra, distritoComunidade: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Nome da propriedade">
-                    <Inp
-                      value={obra.nomePropriedade}
-                      onChange={(e) =>
-                        setObra({ ...obra, nomePropriedade: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Ponto de referência">
-                    <Inp
-                      value={obra.pontoRef}
-                      onChange={(e) =>
-                        setObra({ ...obra, pontoRef: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Nº instalação mais próxima">
-                    <Inp
-                      value={obra.instProxima}
-                      onChange={(e) =>
-                        setObra({ ...obra, instProxima: e.target.value })
-                      }
-                    />
-                  </Field>
-                </div>
-              )}
-              <div className="grid grid-2 divider">
-                <Field label="Distância padrão→rede CEMIG inferior a 30 m?">
-                  <Toggle
-                    value={obra.distMenor30}
-                    onChange={(v) => setObra({ ...obra, distMenor30: v })}
-                    options={[
-                      { v: "Sim", l: "Sim" },
-                      { v: "Não", l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field
-                  label={
-                    coordObrigatoria
-                      ? "Coordenada (lat, long)"
-                      : "Coordenada (lat, long) — opcional"
-                  }
-                  req={coordObrigatoria}
-                  hint="Ex: -19.9123, -43.9385"
-                >
-                  <Inp
-                    value={obra.coordenada}
-                    onChange={(e) =>
-                      setObra({ ...obra, coordenada: e.target.value })
-                    }
-                    placeholder="-19.9123, -43.9385"
-                  />
-                </Field>
-              </div>
-              {coordObrigatoria && !coordPreenchida && (
-                <div className="alert alert-warn" style={{ marginTop: 8 }}>
-                  ⚠ Em área rural com distância superior a 30 m da rede CEMIG, a
-                  coordenada é obrigatória para localização da propriedade.
-                </div>
-              )}
-              <div className="grid grid-2 divider">
-                <Field label="O padrão está pronto para ser ligado?" req>
-                  <Toggle
-                    value={obra.prontoLigar}
-                    onChange={(v) => setObra({ ...obra, prontoLigar: v })}
-                    options={[
-                      { v: "Sim", l: "Sim" },
-                      { v: "Não", l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field label="UC em Área de Preservação Permanente (APP)?">
-                  <Toggle
-                    value={obra.app}
-                    onChange={(v) => setObra({ ...obra, app: v })}
-                    options={[
-                      { v: "Sim", l: "Sim" },
-                      { v: "Não", l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field label="UC em Reserva Legal?">
-                  <Toggle
-                    value={obra.reservaLegal}
-                    onChange={(v) => setObra({ ...obra, reservaLegal: v })}
-                    options={[
-                      { v: "Sim", l: "Sim" },
-                      { v: "Não", l: "Não" },
-                    ]}
-                  />
-                </Field>
-                <Field label="Tipo de rede BT que atende o local">
-                  <Sel
-                    value={obra.tipoRede}
-                    onChange={(e) =>
-                      setObra({ ...obra, tipoRede: e.target.value })
-                    }
-                  >
-                    <option>Monofásica</option>
-                    <option>Bifásica</option>
-                    <option>Trifásica</option>
-                  </Sel>
-                </Field>
-                <Field label="Código do transformador mais próximo">
-                  <Inp
-                    value={obra.transformador}
-                    onChange={(e) =>
-                      setObra({ ...obra, transformador: e.target.value })
-                    }
-                  />
-                </Field>
-              </div>
-            </Card>
-          )}
-
-          {/* ===== TORRES / BLOCOS (múltiplas torres, preenchimento em massa) ===== */}
-          {aba === "blocos" && multiTorres && (
-            <div>
-              <Card
-                eyebrow="Empreendimento"
-                title="Atendimento a Empreendimento com Múltiplas Torres ou Blocos"
-                sub={`Cada ${atend.atendA.toLowerCase()} pode ter seu disjuntor geral e seu disjuntor de combate a incêndio. Preencha o primeiro e use "Replicar" para preenchimento em massa.`}
-              >
-                <div className="kpi-row">
-                  <div className="kpi">
-                    <div className="kpi-label">Atendimento a</div>
-                    <div className="kpi-value" style={{ fontSize: 15 }}>
-                      {atend.atendA}
-                    </div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpi-label">
-                      Total de UCs do empreendimento
-                    </div>
-                    <div className="kpi-value">{totalUcsEmpreendimento}</div>
-                  </div>
-                  <div className="kpi dark">
-                    <div className="kpi-label">
-                      Demanda total do empreendimento
-                    </div>
-                    <div className="kpi-value" style={{ fontSize: 18 }}>
-                      {fmt2(demandaTotalGeral)} kVA
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "flex-end",
-                    flexWrap: "wrap",
-                    marginBottom: 14,
-                  }}
-                >
-                  <Field
-                    label={`Nº de ${atend.atendA === "Bloco" ? "Blocos" : "Torres"}`}
-                  >
-                    <div style={{ maxWidth: 120 }}>
-                      <Inp
-                        type="number"
-                        value={atend.nBlocos}
-                        onChange={(e) =>
-                          setAtend({
-                            ...atend,
-                            nBlocos: Math.max(1, parseInt(e.target.value) || 1),
-                          })
-                        }
-                      />
-                    </div>
-                  </Field>
-                  <Btn variant="ghost" onClick={replicarPrimeiro}>
-                    ⧉ Replicar {atend.atendA} 1 para todos
-                  </Btn>
-                </div>
-
-                {blocos.map((b, bi) => (
-                  <div key={bi} className="uc-block">
-                    <div className="uc-block-head">
-                      <span className="uc-block-title">
-                        {atend.atendA} {b.nome || bi + 1}
-                      </span>
-                      <Badge>
-                        {bi + 1} de {blocos.length}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-3">
-                      <Field
-                        label={`Identificação do ${atend.atendA.toLowerCase()}`}
-                      >
-                        <Inp
-                          value={b.nome}
-                          onChange={(e) =>
-                            setTorre(bi, { nome: e.target.value })
-                          }
-                          placeholder={`${bi + 1}`}
-                        />
-                      </Field>
-                      <Field label="Disjuntor Geral" req>
-                        <Sel
-                          value={b.disjGeral}
-                          onChange={(e) =>
-                            setTorre(bi, { disjGeral: e.target.value })
-                          }
-                        >
-                          <option value="">Selecione…</option>
-                          {DISJ_GER.filter((d) => d.tipo === "tri").map((d) => (
-                            <option key={d.fx} value={d.fx}>
-                              {d.fx}
-                            </option>
-                          ))}
-                        </Sel>
-                      </Field>
-                      <Field label={`Demanda do ${atend.atendA} (kVA)`} req>
-                        <Inp
-                          type="number"
-                          value={b.demandaBloco}
-                          onChange={(e) =>
-                            setTorre(bi, { demandaBloco: e.target.value })
-                          }
-                          placeholder="Ex: 75"
-                        />
-                      </Field>
-                      <Field label={`Qtd. de UCs por ${atend.atendA}`} req>
-                        <Inp
-                          type="number"
-                          value={b.qtdUCs}
-                          onChange={(e) =>
-                            setTorre(bi, { qtdUCs: e.target.value })
-                          }
-                          placeholder="Ex: 48"
-                        />
-                      </Field>
-                      <Field label="Disjuntor do Condomínio / Sist. Combate Incêndio">
-                        <Sel
-                          value={b.disjIncendio}
-                          onChange={(e) =>
-                            setTorre(bi, { disjIncendio: e.target.value })
-                          }
-                        >
-                          <option value="">Selecione…</option>
-                          {DISJ_CN.map((d) => (
-                            <option key={d.fx} value={d.fx}>
-                              {d.fx}
-                            </option>
-                          ))}
-                        </Sel>
-                      </Field>
-                      <Field label="Demanda Condomínio / Combate Incêndio (kVA)">
-                        <Inp
-                          type="number"
-                          value={b.demandaIncendio}
-                          onChange={(e) =>
-                            setTorre(bi, { demandaIncendio: e.target.value })
-                          }
-                          placeholder="Ex: 15"
-                        />
-                      </Field>
-                    </div>
-
-                    {/* UCs da torre/bloco — preenchimento em massa */}
-                    {(b.ucs || []).length > 0 && (
-                      <div className="uc-torre-wrap">
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            margin: "4px 0 10px",
-                            flexWrap: "wrap",
-                            gap: 8,
-                          }}
-                        >
-                          <span className="subbox-title">
-                            Unidades consumidoras do{" "}
-                            {atend.atendA.toLowerCase()} ({b.ucs.length})
-                          </span>
-                          {b.ucs.length > 1 && (
-                            <Btn
-                              variant="ghost"
-                              onClick={() => replicarUC1Torre(bi)}
-                            >
-                              ⧉ Replicar UC 1 para todas
-                            </Btn>
-                          )}
+                    <div className="kpi-row">
+                      <div className="kpi">
+                        <div className="kpi-label">Atendimento a</div>
+                        <div className="kpi-value" style={{ fontSize: 15 }}>
+                          {atend.atendA}
                         </div>
-                        {b.ucs.map((u, ui) => (
-                          <div key={ui} className="uc-mini">
-                            <div className="uc-mini-head">
-                              UC {ui + 1}
-                              {ui === 0 && b.ucs.length > 1 && (
-                                <span className="uc-mini-tag">
-                                  modelo p/ replicar
-                                </span>
+                      </div>
+                      <div className="kpi">
+                        <div className="kpi-label">
+                          Total de UCs do empreendimento
+                        </div>
+                        <div className="kpi-value">
+                          {totalUcsEmpreendimento}
+                        </div>
+                      </div>
+                      <div className="kpi dark">
+                        <div className="kpi-label">
+                          Demanda total do empreendimento
+                        </div>
+                        <div className="kpi-value" style={{ fontSize: 18 }}>
+                          {fmt2(demandaTotalGeral)} kVA
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "flex-end",
+                        flexWrap: "wrap",
+                        marginBottom: 14,
+                      }}
+                    >
+                      <Field
+                        label={`Nº de ${atend.atendA === "Bloco" ? "Blocos" : "Torres"}`}
+                      >
+                        <div style={{ maxWidth: 120 }}>
+                          <Inp
+                            type="number"
+                            value={atend.nBlocos}
+                            onChange={(e) =>
+                              setAtend({
+                                ...atend,
+                                nBlocos: Math.max(
+                                  1,
+                                  parseInt(e.target.value) || 1,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                      </Field>
+                      <Btn variant="ghost" onClick={replicarPrimeiro}>
+                        ⧉ Replicar {atend.atendA} 1 para todos
+                      </Btn>
+                    </div>
+
+                    {blocos.map((b, bi) => (
+                      <div key={bi} className="uc-block">
+                        <div className="uc-block-head">
+                          <span className="uc-block-title">
+                            {atend.atendA} {b.nome || bi + 1}
+                          </span>
+                          <Badge>
+                            {bi + 1} de {blocos.length}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-3">
+                          <Field
+                            label={`Identificação do ${atend.atendA.toLowerCase()}`}
+                          >
+                            <Inp
+                              value={b.nome}
+                              onChange={(e) =>
+                                setTorre(bi, { nome: e.target.value })
+                              }
+                              placeholder={`${bi + 1}`}
+                            />
+                          </Field>
+                          <Field label="Disjuntor Geral" req>
+                            <Sel
+                              value={b.disjGeral}
+                              onChange={(e) =>
+                                setTorre(bi, { disjGeral: e.target.value })
+                              }
+                            >
+                              <option value="">Selecione…</option>
+                              {DISJ_GER.filter((d) => d.tipo === "tri").map(
+                                (d) => (
+                                  <option key={d.fx} value={d.fx}>
+                                    {d.fx}
+                                  </option>
+                                ),
+                              )}
+                            </Sel>
+                          </Field>
+                          <Field label={`Demanda do ${atend.atendA} (kVA)`} req>
+                            <Inp
+                              type="number"
+                              value={b.demandaBloco}
+                              onChange={(e) =>
+                                setTorre(bi, { demandaBloco: e.target.value })
+                              }
+                              placeholder="Ex: 75"
+                            />
+                          </Field>
+                          <Field label={`Qtd. de UCs por ${atend.atendA}`} req>
+                            <Inp
+                              type="number"
+                              value={b.qtdUCs}
+                              onChange={(e) =>
+                                setTorre(bi, { qtdUCs: e.target.value })
+                              }
+                              placeholder="Ex: 48"
+                            />
+                          </Field>
+                          <Field label="Disjuntor do Condomínio / Sist. Combate Incêndio">
+                            <Sel
+                              value={b.disjIncendio}
+                              onChange={(e) =>
+                                setTorre(bi, { disjIncendio: e.target.value })
+                              }
+                            >
+                              <option value="">Selecione…</option>
+                              {DISJ_CN.map((d) => (
+                                <option key={d.fx} value={d.fx}>
+                                  {d.fx}
+                                </option>
+                              ))}
+                            </Sel>
+                          </Field>
+                          <Field label="Demanda Condomínio / Combate Incêndio (kVA)">
+                            <Inp
+                              type="number"
+                              value={b.demandaIncendio}
+                              onChange={(e) =>
+                                setTorre(bi, {
+                                  demandaIncendio: e.target.value,
+                                })
+                              }
+                              placeholder="Ex: 15"
+                            />
+                          </Field>
+                        </div>
+
+                        {/* UCs da torre/bloco — preenchimento em massa */}
+                        {(b.ucs || []).length > 0 && (
+                          <div className="uc-torre-wrap">
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                margin: "4px 0 10px",
+                                flexWrap: "wrap",
+                                gap: 8,
+                              }}
+                            >
+                              <span className="subbox-title">
+                                Unidades consumidoras do{" "}
+                                {atend.atendA.toLowerCase()} ({b.ucs.length})
+                              </span>
+                              {b.ucs.length > 1 && (
+                                <Btn
+                                  variant="ghost"
+                                  onClick={() => replicarUC1Torre(bi)}
+                                >
+                                  ⧉ Replicar UC 1 para todas
+                                </Btn>
                               )}
                             </div>
-                            <div className="grid grid-3">
-                              <Field label="Identificação">
-                                <Inp
-                                  value={u.identificacao}
-                                  onChange={(e) =>
-                                    setUcTorre(bi, ui, {
-                                      identificacao: e.target.value,
-                                    })
-                                  }
-                                />
-                              </Field>
-                              <Field label="Complemento" req={b.ucs.length > 1}>
-                                <Inp
-                                  value={u.complemento}
-                                  onChange={(e) =>
-                                    setUcTorre(bi, ui, {
-                                      complemento: e.target.value,
-                                    })
-                                  }
-                                  placeholder="Ex: 101"
-                                />
-                              </Field>
-                              <Field label="Nº Predial">
-                                <Inp
-                                  value={u.nPredial}
-                                  onChange={(e) =>
-                                    setUcTorre(bi, ui, {
-                                      nPredial: e.target.value,
-                                    })
-                                  }
-                                />
-                              </Field>
-                              <Field label="Solicitação" req>
-                                <Sel
-                                  value={u.solicitacao}
-                                  onChange={(e) =>
-                                    setUcTorre(bi, ui, {
-                                      solicitacao: e.target.value,
-                                    })
-                                  }
-                                >
-                                  <option>Conexão Nova</option>
-                                  <option>Alteração de Carga</option>
-                                  <option>Caixa Existente sem Alteração</option>
-                                </Sel>
-                              </Field>
-                              <Field label="Atividade" req>
-                                <Sel
-                                  value={u.atividade}
-                                  onChange={(e) =>
-                                    setUcTorre(bi, ui, {
-                                      atividade: e.target.value,
-                                    })
-                                  }
-                                >
-                                  <option>Residencial</option>
-                                  <option>Comercial</option>
-                                  <option>Industrial</option>
-                                  <option>Rural</option>
-                                </Sel>
-                              </Field>
-                              <Field
-                                label="Ramo de atividade"
-                                req={u.atividade !== "Residencial"}
-                              >
-                                <Inp
-                                  value={u.ramo}
-                                  onChange={(e) =>
-                                    setUcTorre(bi, ui, { ramo: e.target.value })
-                                  }
-                                  placeholder={
-                                    u.atividade === "Residencial"
-                                      ? "—"
-                                      : "Obrigatório"
-                                  }
-                                />
-                              </Field>
-                              {/* Instalação / UC somente se NÃO for conexão nova */}
+                            {b.ucs.map((u, ui) => (
+                              <div key={ui} className="uc-mini">
+                                <div className="uc-mini-head">
+                                  UC {ui + 1}
+                                  {ui === 0 && b.ucs.length > 1 && (
+                                    <span className="uc-mini-tag">
+                                      modelo p/ replicar
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-3">
+                                  <Field label="Identificação">
+                                    <Inp
+                                      value={u.identificacao}
+                                      onChange={(e) =>
+                                        setUcTorre(bi, ui, {
+                                          identificacao: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field
+                                    label="Complemento"
+                                    req={b.ucs.length > 1}
+                                  >
+                                    <Inp
+                                      value={u.complemento}
+                                      onChange={(e) =>
+                                        setUcTorre(bi, ui, {
+                                          complemento: e.target.value,
+                                        })
+                                      }
+                                      placeholder="Ex: 101"
+                                    />
+                                  </Field>
+                                  <Field label="Nº Predial">
+                                    <Inp
+                                      value={u.nPredial}
+                                      onChange={(e) =>
+                                        setUcTorre(bi, ui, {
+                                          nPredial: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label="Solicitação" req>
+                                    <Sel
+                                      value={u.solicitacao}
+                                      onChange={(e) =>
+                                        setUcTorre(bi, ui, {
+                                          solicitacao: e.target.value,
+                                        })
+                                      }
+                                    >
+                                      <option>Conexão Nova</option>
+                                      <option>Alteração de Carga</option>
+                                      <option>
+                                        Caixa Existente sem Alteração
+                                      </option>
+                                    </Sel>
+                                  </Field>
+                                  <Field label="Atividade" req>
+                                    <Sel
+                                      value={u.atividade}
+                                      onChange={(e) =>
+                                        setUcTorre(bi, ui, {
+                                          atividade: e.target.value,
+                                        })
+                                      }
+                                    >
+                                      <option>Residencial</option>
+                                      <option>Comercial</option>
+                                      <option>Industrial</option>
+                                      <option>Rural</option>
+                                    </Sel>
+                                  </Field>
+                                  <Field
+                                    label="Ramo de atividade"
+                                    req={u.atividade !== "Residencial"}
+                                  >
+                                    <Inp
+                                      value={u.ramo}
+                                      onChange={(e) =>
+                                        setUcTorre(bi, ui, {
+                                          ramo: e.target.value,
+                                        })
+                                      }
+                                      placeholder={
+                                        u.atividade === "Residencial"
+                                          ? "—"
+                                          : "Obrigatório"
+                                      }
+                                    />
+                                  </Field>
+                                  {/* Instalação / UC somente se NÃO for conexão nova */}
+                                  {u.solicitacao !== "Conexão Nova" && (
+                                    <Field label="Instalação / UC" req>
+                                      <Inp
+                                        value={u.instalacao}
+                                        onChange={(e) =>
+                                          setUcTorre(bi, ui, {
+                                            instalacao: e.target.value,
+                                          })
+                                        }
+                                        placeholder="Nº instalação existente"
+                                      />
+                                    </Field>
+                                  )}
+                                  <Field label="Disjuntor da UC">
+                                    <Sel
+                                      value={u.disjPara}
+                                      onChange={(e) =>
+                                        setUcTorre(bi, ui, {
+                                          disjPara: e.target.value,
+                                        })
+                                      }
+                                    >
+                                      <option value="">Selecione…</option>
+                                      {DISJ.map((d) => (
+                                        <option key={d.fx} value={d.fx}>
+                                          {d.fx}
+                                        </option>
+                                      ))}
+                                    </Sel>
+                                  </Field>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {demandaTotalGeral > 304 && (
+                      <div
+                        className="alert alert-info"
+                        style={{ marginTop: 10 }}
+                      >
+                        Demanda total acima de 304 kVA: o atendimento fica
+                        condicionado à apresentação do projeto elétrico com
+                        ART/TRT.
+                      </div>
+                    )}
+                  </Card>
+                </div>
+              )}
+
+              {/* ===== UNIDADES CONSUMIDORAS — COLETIVO (identificação) ===== */}
+              {aba === "ucs" && coletivo && !multiTorres && (
+                <div>
+                  {trocaDisjGeral && (
+                    <Card
+                      eyebrow="Alteração de carga"
+                      title="Troca do Disjuntor Geral e Demandas"
+                      sub="Informe o disjuntor geral existente e o novo, além da demanda atual e futura do agrupamento. A demanda futura corresponde à soma das demandas previstas das UCs."
+                    >
+                      <div className="grid grid-2">
+                        <Field label="Disjuntor geral existente" req>
+                          <Sel
+                            value={atend.disjGeralAtual}
+                            onChange={(e) =>
+                              setAtend({
+                                ...atend,
+                                disjGeralAtual: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Selecione…</option>
+                            {DISJ.map((d) => (
+                              <option key={d.fx} value={d.fx}>
+                                {d.fx}
+                              </option>
+                            ))}
+                          </Sel>
+                        </Field>
+                        <Field
+                          label="Disjuntor geral novo"
+                          req
+                          hint={`Opções acima da maior faixa das UCs (${maiorCorrenteUC || "—"} A).`}
+                        >
+                          <Sel
+                            value={atend.disjuntorGeral}
+                            onChange={(e) =>
+                              setAtend({
+                                ...atend,
+                                disjuntorGeral: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Selecione…</option>
+                            {opcoesDisjGeral.map((o) => (
+                              <option key={o} value={o}>
+                                {o}
+                              </option>
+                            ))}
+                          </Sel>
+                        </Field>
+                        <Field label="Demanda atual (kVA)" req>
+                          <Inp
+                            type="number"
+                            value={atend.demandaAtual}
+                            onChange={(e) =>
+                              setAtend({
+                                ...atend,
+                                demandaAtual: e.target.value,
+                              })
+                            }
+                            placeholder="0,0"
+                          />
+                        </Field>
+                        <Field
+                          label="Demanda futura (kVA)"
+                          hint="Calculada automaticamente: soma das demandas previstas das UCs."
+                        >
+                          <div className="readonly-val">
+                            {fmt2(demandaPrevTotal)} kVA
+                          </div>
+                        </Field>
+                      </div>
+                    </Card>
+                  )}
+                  {disjGeralObrigatorio && !trocaDisjGeral && (
+                    <Card
+                      eyebrow="Proteção geral"
+                      title="Disjuntor Geral do Agrupamento"
+                      sub={`Obrigatório quando há UC bi/trifásica com proteção acima de 60/63 A. Faixas disponíveis: acima de ${maiorCorrenteUC || "—"} A.`}
+                    >
+                      <div className="geral-box" style={{ marginTop: 0 }}>
+                        <Field label="Disjuntor geral" req>
+                          <Sel
+                            value={atend.disjuntorGeral}
+                            onChange={(e) =>
+                              setAtend({
+                                ...atend,
+                                disjuntorGeral: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Selecione…</option>
+                            {opcoesDisjGeral.map((o) => (
+                              <option key={o} value={o}>
+                                {o}
+                              </option>
+                            ))}
+                          </Sel>
+                        </Field>
+                        {opcoesDisjGeral.length === 0 && (
+                          <div
+                            className="alert alert-info"
+                            style={{ marginTop: 10 }}
+                          >
+                            Preencha os disjuntores das UCs acima para liberar
+                            as opções.
+                          </div>
+                        )}
+                        {atend.disjuntorGeral &&
+                          correnteDisj(atend.disjuntorGeral) <=
+                            maiorCorrenteUC && (
+                            <div
+                              className="alert alert-warn"
+                              style={{ marginTop: 10 }}
+                            >
+                              ⚠ O disjuntor geral deve ter faixa superior ao
+                              maior disjuntor das UCs ({maiorCorrenteUC} A).
+                            </div>
+                          )}
+                      </div>
+                    </Card>
+                  )}
+
+                  <Card
+                    eyebrow="Identificação"
+                    title={`Unidades Consumidoras (${ucBlocos.length})`}
+                    sub="Preencha os dados de identificação de cada UC. Campos com valor padrão já vêm preenchidos. Em Conexão Nova não há disjuntor 'De' (a instalação ainda não existe)."
+                  >
+                    {ucBlocos.length > 1 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <Btn variant="ghost" onClick={replicarUC1Coletivo}>
+                          ⧉ Replicar UC 1 para todas
+                        </Btn>
+                      </div>
+                    )}
+                    {ucBlocos.map((u, ui) => (
+                      <div key={ui} className="uc-block">
+                        <div className="uc-block-head">
+                          <span className="uc-block-title">
+                            {u.identificacao || `UC ${ui + 1}`}
+                          </span>
+                          <Badge>
+                            {ui + 1} de {ucBlocos.length}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-3">
+                          <Field
+                            label="Identificação"
+                            hint="Ex: Torre 1 - UC 1"
+                          >
+                            <Inp
+                              value={u.identificacao}
+                              onChange={(e) =>
+                                setBloco(ui, { identificacao: e.target.value })
+                              }
+                            />
+                          </Field>
+                          <Field
+                            label="Nº Predial"
+                            hint="Igual ao número de Dados da Obra (mesmo para todas as UCs)."
+                          >
+                            <div className="readonly-val">
+                              {obra.num ||
+                                "— informe o número em Dados da Obra"}
+                            </div>
+                          </Field>
+                          <Field label="Complemento" req={ucBlocos.length > 1}>
+                            <Inp
+                              value={u.complemento}
+                              onChange={(e) =>
+                                setBloco(ui, { complemento: e.target.value })
+                              }
+                              placeholder="Ex: 101"
+                            />
+                          </Field>
+                          <Field label="Caixa">
+                            <Inp
+                              value={u.caixa}
+                              onChange={(e) =>
+                                setBloco(ui, { caixa: e.target.value })
+                              }
+                              placeholder="Ex: Apartamento"
+                            />
+                          </Field>
+                          <Field label="Solicitação" req>
+                            <Sel
+                              value={u.solicitacao}
+                              onChange={(e) =>
+                                setBloco(ui, { solicitacao: e.target.value })
+                              }
+                            >
+                              <option>Conexão Nova</option>
+                              <option>Alteração de Carga</option>
+                              <option>Caixa Existente sem Alteração</option>
+                            </Sel>
+                          </Field>
+                          <Field label="Mudança de local">
+                            <Toggle
+                              value={u.mudancaLocal}
+                              onChange={(v) =>
+                                setBloco(ui, { mudancaLocal: v })
+                              }
+                              options={[
+                                { v: "Sim", l: "Sim" },
+                                { v: "Não", l: "Não" },
+                              ]}
+                            />
+                          </Field>
+                          <Field label="Atividade principal" req>
+                            <Sel
+                              value={u.atividade}
+                              onChange={(e) =>
+                                setBloco(ui, { atividade: e.target.value })
+                              }
+                            >
+                              <option>Residencial</option>
+                              <option>Comercial</option>
+                              <option>Industrial</option>
+                              <option>Rural</option>
+                            </Sel>
+                          </Field>
+                          <Field
+                            label="Ramo de atividade"
+                            req={u.atividade !== "Residencial"}
+                          >
+                            <Inp
+                              value={u.ramo}
+                              onChange={(e) =>
+                                setBloco(ui, { ramo: e.target.value })
+                              }
+                              placeholder={
+                                u.atividade === "Residencial"
+                                  ? "—"
+                                  : "Obrigatório"
+                              }
+                            />
+                          </Field>
+                          {u.solicitacao !== "Conexão Nova" && (
+                            <Field label="Instalação" req>
+                              <Inp
+                                value={u.instalacao}
+                                onChange={(e) =>
+                                  setBloco(ui, { instalacao: e.target.value })
+                                }
+                                placeholder="Nº instalação existente"
+                              />
+                            </Field>
+                          )}
+                          <Field label="Disjuntor" span={3}>
+                            <div className="disj-pair">
                               {u.solicitacao !== "Conexão Nova" && (
-                                <Field label="Instalação / UC" req>
-                                  <Inp
-                                    value={u.instalacao}
+                                <div>
+                                  <Sel
+                                    value={u.disjDe}
                                     onChange={(e) =>
-                                      setUcTorre(bi, ui, {
-                                        instalacao: e.target.value,
-                                      })
+                                      setBloco(ui, { disjDe: e.target.value })
                                     }
-                                    placeholder="Nº instalação existente"
-                                  />
-                                </Field>
+                                  >
+                                    <option value="">De: (atual)…</option>
+                                    {DISJ.map((d) => (
+                                      <option key={d.fx} value={d.fx}>
+                                        {d.fx}
+                                      </option>
+                                    ))}
+                                  </Sel>
+                                </div>
                               )}
-                              <Field label="Disjuntor da UC">
+                              <div>
                                 <Sel
                                   value={u.disjPara}
                                   onChange={(e) =>
-                                    setUcTorre(bi, ui, {
-                                      disjPara: e.target.value,
-                                    })
+                                    setBloco(ui, { disjPara: e.target.value })
+                                  }
+                                >
+                                  <option value="">
+                                    {u.solicitacao === "Conexão Nova"
+                                      ? "Disjuntor solicitado…"
+                                      : "Para: (solicitado)…"}
+                                  </option>
+                                  {DISJ_CN.map((d) => (
+                                    <option key={d.fx} value={d.fx}>
+                                      {d.fx}
+                                    </option>
+                                  ))}
+                                </Sel>
+                              </div>
+                            </div>
+                          </Field>
+                        </div>
+                      </div>
+                    ))}
+                  </Card>
+                </div>
+              )}
+
+              {/* ===== UNIDADES CONSUMIDORAS — INDIVIDUAL (identificação de cada UC) ===== */}
+              {aba === "ucs" && !coletivo && (
+                <div>
+                  <Card
+                    eyebrow="Identificação"
+                    title={`Unidades Consumidoras (${ucsDet.length})`}
+                    sub="Dados de identificação de cada unidade consumidora. O detalhamento das cargas é feito na próxima etapa. Em Conexão Nova não há disjuntor 'De' nem instalação."
+                  >
+                    {ucsDet.map((u, ui) => (
+                      <div key={ui} className="uc-block">
+                        <div className="uc-block-head">
+                          <span className="uc-block-title">UC {ui + 1}</span>
+                          <Badge>
+                            {ui + 1} de {ucsDet.length}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-3">
+                          <Field label="Tipo de solicitação" req>
+                            <Sel
+                              value={u.solicitacao}
+                              onChange={(e) =>
+                                setUcDet(ui, { solicitacao: e.target.value })
+                              }
+                            >
+                              <option>Conexão Nova</option>
+                              <option>Alteração de Carga</option>
+                              <option>Caixa Existente sem Alteração</option>
+                            </Sel>
+                          </Field>
+                          <Field label="Atividade principal" req>
+                            <Sel
+                              value={u.atividade}
+                              onChange={(e) =>
+                                setUcDet(ui, { atividade: e.target.value })
+                              }
+                            >
+                              <option>Residencial</option>
+                              <option>Comercial</option>
+                              <option>Industrial</option>
+                              <option>Rural</option>
+                            </Sel>
+                          </Field>
+                          <Field
+                            label="Ramo de atividade"
+                            req={u.atividade !== "Residencial"}
+                          >
+                            <Inp
+                              value={u.ramo}
+                              onChange={(e) =>
+                                setUcDet(ui, { ramo: e.target.value })
+                              }
+                              placeholder={
+                                u.atividade === "Residencial"
+                                  ? "—"
+                                  : "Obrigatório"
+                              }
+                            />
+                          </Field>
+                          <Field
+                            label="Nº Predial"
+                            hint="Igual ao número de Dados da Obra (mesmo para todas as UCs)."
+                          >
+                            <div className="readonly-val">
+                              {obra.num ||
+                                "— informe o número em Dados da Obra"}
+                            </div>
+                          </Field>
+                          <Field label="Complemento" req={ucsDet.length > 1}>
+                            <Inp
+                              value={u.complemento}
+                              onChange={(e) =>
+                                setUcDet(ui, { complemento: e.target.value })
+                              }
+                              placeholder="Ex: Casa 1"
+                            />
+                          </Field>
+                          <Field label="Caixa / Identificação">
+                            <Inp
+                              value={u.caixa}
+                              onChange={(e) =>
+                                setUcDet(ui, { caixa: e.target.value })
+                              }
+                            />
+                          </Field>
+                          {u.solicitacao !== "Conexão Nova" && (
+                            <React.Fragment>
+                              <Field label="Nº Instalação / Medidor" req>
+                                <Inp
+                                  value={u.instalacao}
+                                  onChange={(e) =>
+                                    setUcDet(ui, { instalacao: e.target.value })
+                                  }
+                                />
+                              </Field>
+                              <Field label="Mudança de local">
+                                <Toggle
+                                  value={u.mudancaLocal}
+                                  onChange={(v) =>
+                                    setUcDet(ui, { mudancaLocal: v })
+                                  }
+                                  options={[
+                                    { v: "Sim", l: "Sim" },
+                                    { v: "Não", l: "Não" },
+                                  ]}
+                                />
+                              </Field>
+                              <Field label="Disjuntor De (atual)">
+                                <Sel
+                                  value={u.disjDe}
+                                  onChange={(e) =>
+                                    setUcDet(ui, { disjDe: e.target.value })
                                   }
                                 >
                                   <option value="">Selecione…</option>
@@ -2242,834 +2826,494 @@ function App() {
                                   ))}
                                 </Sel>
                               </Field>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {demandaTotalGeral > 304 && (
-                  <div className="alert alert-info" style={{ marginTop: 10 }}>
-                    Demanda total acima de 304 kVA: o atendimento fica
-                    condicionado à apresentação do projeto elétrico com ART/TRT.
-                  </div>
-                )}
-              </Card>
-            </div>
-          )}
-
-          {/* ===== UNIDADES CONSUMIDORAS — COLETIVO (identificação) ===== */}
-          {aba === "ucs" && coletivo && !multiTorres && (
-            <div>
-              <Card
-                eyebrow="Identificação"
-                title={`Unidades Consumidoras (${ucBlocos.length})`}
-                sub="Preencha os dados de identificação de cada UC. Campos com valor padrão já vêm preenchidos. Em Conexão Nova não há disjuntor 'De' (a instalação ainda não existe)."
-              >
-                {ucBlocos.length > 1 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "flex-end",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <Btn variant="ghost" onClick={replicarUC1Coletivo}>
-                      ⧉ Replicar UC 1 para todas
-                    </Btn>
-                  </div>
-                )}
-                {ucBlocos.map((u, ui) => (
-                  <div key={ui} className="uc-block">
-                    <div className="uc-block-head">
-                      <span className="uc-block-title">
-                        {u.identificacao || `UC ${ui + 1}`}
-                      </span>
-                      <Badge>
-                        {ui + 1} de {ucBlocos.length}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-3">
-                      <Field label="Identificação" hint="Ex: Torre 1 - UC 1">
-                        <Inp
-                          value={u.identificacao}
-                          onChange={(e) =>
-                            setBloco(ui, { identificacao: e.target.value })
-                          }
-                        />
-                      </Field>
-                      <Field label="Nº Predial">
-                        <Inp
-                          value={u.nPredial}
-                          onChange={(e) =>
-                            setBloco(ui, { nPredial: e.target.value })
-                          }
-                        />
-                      </Field>
-                      <Field label="Complemento" req={ucBlocos.length > 1}>
-                        <Inp
-                          value={u.complemento}
-                          onChange={(e) =>
-                            setBloco(ui, { complemento: e.target.value })
-                          }
-                          placeholder="Ex: 101"
-                        />
-                      </Field>
-                      <Field label="Caixa">
-                        <Inp
-                          value={u.caixa}
-                          onChange={(e) =>
-                            setBloco(ui, { caixa: e.target.value })
-                          }
-                          placeholder="Ex: Apartamento"
-                        />
-                      </Field>
-                      <Field label="Solicitação" req>
-                        <Sel
-                          value={u.solicitacao}
-                          onChange={(e) =>
-                            setBloco(ui, { solicitacao: e.target.value })
-                          }
-                        >
-                          <option>Conexão Nova</option>
-                          <option>Alteração de Carga</option>
-                          <option>Caixa Existente sem Alteração</option>
-                        </Sel>
-                      </Field>
-                      <Field label="Mudança de local">
-                        <Toggle
-                          value={u.mudancaLocal}
-                          onChange={(v) => setBloco(ui, { mudancaLocal: v })}
-                          options={[
-                            { v: "Sim", l: "Sim" },
-                            { v: "Não", l: "Não" },
-                          ]}
-                        />
-                      </Field>
-                      <Field label="Atividade principal" req>
-                        <Sel
-                          value={u.atividade}
-                          onChange={(e) =>
-                            setBloco(ui, { atividade: e.target.value })
-                          }
-                        >
-                          <option>Residencial</option>
-                          <option>Comercial</option>
-                          <option>Industrial</option>
-                          <option>Rural</option>
-                        </Sel>
-                      </Field>
-                      <Field
-                        label="Ramo de atividade"
-                        req={u.atividade !== "Residencial"}
-                      >
-                        <Inp
-                          value={u.ramo}
-                          onChange={(e) =>
-                            setBloco(ui, { ramo: e.target.value })
-                          }
-                          placeholder={
-                            u.atividade === "Residencial" ? "—" : "Obrigatório"
-                          }
-                        />
-                      </Field>
-                      {u.solicitacao !== "Conexão Nova" && (
-                        <Field label="Instalação" req>
-                          <Inp
-                            value={u.instalacao}
-                            onChange={(e) =>
-                              setBloco(ui, { instalacao: e.target.value })
-                            }
-                            placeholder="Nº instalação existente"
-                          />
-                        </Field>
-                      )}
-                      <Field label="Disjuntor" span={3}>
-                        <div className="disj-pair">
-                          {u.solicitacao !== "Conexão Nova" && (
-                            <div>
-                              <Sel
-                                value={u.disjDe}
-                                onChange={(e) =>
-                                  setBloco(ui, { disjDe: e.target.value })
-                                }
-                              >
-                                <option value="">De: (atual)…</option>
-                                {DISJ.map((d) => (
-                                  <option key={d.fx} value={d.fx}>
-                                    {d.fx}
-                                  </option>
-                                ))}
-                              </Sel>
-                            </div>
+                            </React.Fragment>
                           )}
-                          <div>
-                            <Sel
-                              value={u.disjPara}
-                              onChange={(e) =>
-                                setBloco(ui, { disjPara: e.target.value })
-                              }
-                            >
-                              <option value="">
-                                {u.solicitacao === "Conexão Nova"
-                                  ? "Disjuntor solicitado…"
-                                  : "Para: (solicitado)…"}
-                              </option>
-                              {DISJ_CN.map((d) => (
-                                <option key={d.fx} value={d.fx}>
-                                  {d.fx}
-                                </option>
-                              ))}
-                            </Sel>
-                          </div>
                         </div>
-                      </Field>
+                      </div>
+                    ))}
+                  </Card>
+                  {ucsDet.length > 1 && (
+                    <div
+                      className={
+                        "alert " +
+                        (validacaoDisjuntores.ok ? "alert-ok" : "alert-warn")
+                      }
+                    >
+                      <b>
+                        Regra de disjuntores (múltiplas UCs sem proteção geral):
+                      </b>{" "}
+                      no máximo 1 tripolar de 63 A e/ou até 2 mono/bifásicos de
+                      63 A. {validacaoDisjuntores.ok ? "✔ " : "⚠ "}
+                      {validacaoDisjuntores.msg}
                     </div>
-                  </div>
-                ))}
-              </Card>
+                  )}
+                </div>
+              )}
 
-              {disjGeralObrigatorio && (
+              {/* ===== CARGAS — COLETIVO: previsão de carga POR UC ===== */}
+              {aba === "cargas" && coletivo && !multiTorres && (
                 <Card
-                  eyebrow="Proteção geral"
-                  title="Disjuntor Geral do Agrupamento"
-                  sub={`Obrigatório quando há UC bi/trifásica com proteção acima de 60/63 A. Faixas disponíveis: acima de ${maiorCorrenteUC || "—"} A.`}
+                  eyebrow="Carga do agrupamento"
+                  title="Previsão de Carga por Unidade Consumidora"
+                  sub="Informe a previsão de carga instalada (kW) e a demanda prevista (kVA) de cada UC. A carga e a demanda totais são somadas automaticamente."
                 >
-                  <div className="geral-box" style={{ marginTop: 0 }}>
-                    <Field label="Disjuntor geral" req>
-                      <Sel
-                        value={atend.disjuntorGeral}
-                        onChange={(e) =>
-                          setAtend({ ...atend, disjuntorGeral: e.target.value })
-                        }
-                      >
-                        <option value="">Selecione…</option>
-                        {opcoesDisjGeral.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
+                  {ucBlocos.length > 1 && (
+                    <div className="prev-toolbar">
+                      <Btn variant="ghost" onClick={replicarPrevTodas}>
+                        Replicar previsão da UC 1 para todas
+                      </Btn>
+                    </div>
+                  )}
+                  <div className="prev-table-wrap">
+                    <table className="prev-table">
+                      <thead>
+                        <tr>
+                          <th>Unidade</th>
+                          <th>Ilum. (kW)</th>
+                          <th>Tomada (kW)</th>
+                          <th>Chuveiro (kW)</th>
+                          <th>Ar Cond. (kW)</th>
+                          <th>Outros (kW)</th>
+                          <th>Carga (kW)</th>
+                          <th className="col-demanda">Demanda (kVA) *</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ucBlocos.map((u, ui) => (
+                          <tr key={ui}>
+                            <td className="uc-name">
+                              {u.identificacao || `UC ${ui + 1}`}
+                            </td>
+                            {["ilum", "tomada", "chuveiro", "ar", "outros"].map(
+                              (k) => (
+                                <td key={k}>
+                                  <input
+                                    type="number"
+                                    value={(u.prev || {})[k] || ""}
+                                    onChange={(e) =>
+                                      setBlocoPrev(ui, { [k]: e.target.value })
+                                    }
+                                    placeholder="0,0"
+                                  />
+                                </td>
+                              ),
+                            )}
+                            <td className="carga-cell">{fmt2(prevKwUC(u))}</td>
+                            <td className="col-demanda">
+                              <input
+                                className="demanda-prev"
+                                type="number"
+                                value={(u.prev || {}).demanda || ""}
+                                onChange={(e) =>
+                                  setBlocoPrev(ui, { demanda: e.target.value })
+                                }
+                                placeholder="0,0"
+                              />
+                            </td>
+                          </tr>
                         ))}
-                      </Sel>
-                    </Field>
-                    {opcoesDisjGeral.length === 0 && (
-                      <div
-                        className="alert alert-info"
-                        style={{ marginTop: 10 }}
-                      >
-                        Preencha os disjuntores das UCs acima para liberar as
-                        opções.
-                      </div>
-                    )}
-                    {atend.disjuntorGeral &&
-                      correnteDisj(atend.disjuntorGeral) <= maiorCorrenteUC && (
-                        <div
-                          className="alert alert-warn"
-                          style={{ marginTop: 10 }}
-                        >
-                          ⚠ O disjuntor geral deve ter faixa superior ao maior
-                          disjuntor das UCs ({maiorCorrenteUC} A).
-                        </div>
-                      )}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td className="uc-name">Total</td>
+                          <td colSpan={5}></td>
+                          <td className="carga-cell">{fmt2(prevTotalKw)}</td>
+                          <td className="col-demanda total-dem">
+                            {fmt2(demandaPrevTotal)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* ===== UNIDADES CONSUMIDORAS — INDIVIDUAL (identificação de cada UC) ===== */}
-          {aba === "ucs" && !coletivo && (
-            <div>
-              <Card
-                eyebrow="Identificação"
-                title={`Unidades Consumidoras (${ucsDet.length})`}
-                sub="Dados de identificação de cada unidade consumidora. O detalhamento das cargas é feito na próxima etapa. Em Conexão Nova não há disjuntor 'De' nem instalação."
-              >
-                {ucsDet.map((u, ui) => (
-                  <div key={ui} className="uc-block">
-                    <div className="uc-block-head">
-                      <span className="uc-block-title">UC {ui + 1}</span>
-                      <Badge>
-                        {ui + 1} de {ucsDet.length}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-3">
-                      <Field label="Tipo de solicitação" req>
-                        <Sel
-                          value={u.solicitacao}
-                          onChange={(e) =>
-                            setUcDet(ui, { solicitacao: e.target.value })
-                          }
-                        >
-                          <option>Conexão Nova</option>
-                          <option>Alteração de Carga</option>
-                          <option>Caixa Existente sem Alteração</option>
-                        </Sel>
-                      </Field>
-                      <Field label="Atividade principal" req>
-                        <Sel
-                          value={u.atividade}
-                          onChange={(e) =>
-                            setUcDet(ui, { atividade: e.target.value })
-                          }
-                        >
-                          <option>Residencial</option>
-                          <option>Comercial</option>
-                          <option>Industrial</option>
-                          <option>Rural</option>
-                        </Sel>
-                      </Field>
-                      <Field
-                        label="Ramo de atividade"
-                        req={u.atividade !== "Residencial"}
-                      >
-                        <Inp
-                          value={u.ramo}
-                          onChange={(e) =>
-                            setUcDet(ui, { ramo: e.target.value })
-                          }
-                          placeholder={
-                            u.atividade === "Residencial" ? "—" : "Obrigatório"
-                          }
-                        />
-                      </Field>
-                      <Field label="Nº Predial" req>
-                        <Inp
-                          value={u.nPredial}
-                          onChange={(e) =>
-                            setUcDet(ui, { nPredial: e.target.value })
-                          }
-                        />
-                      </Field>
-                      <Field label="Complemento" req={ucsDet.length > 1}>
-                        <Inp
-                          value={u.complemento}
-                          onChange={(e) =>
-                            setUcDet(ui, { complemento: e.target.value })
-                          }
-                          placeholder="Ex: Casa 1"
-                        />
-                      </Field>
-                      <Field label="Caixa / Identificação">
-                        <Inp
-                          value={u.caixa}
-                          onChange={(e) =>
-                            setUcDet(ui, { caixa: e.target.value })
-                          }
-                        />
-                      </Field>
-                      {u.solicitacao !== "Conexão Nova" && (
-                        <React.Fragment>
-                          <Field label="Nº Instalação / Medidor" req>
-                            <Inp
-                              value={u.instalacao}
-                              onChange={(e) =>
-                                setUcDet(ui, { instalacao: e.target.value })
-                              }
-                            />
-                          </Field>
-                          <Field label="Mudança de local">
-                            <Toggle
-                              value={u.mudancaLocal}
-                              onChange={(v) =>
-                                setUcDet(ui, { mudancaLocal: v })
-                              }
-                              options={[
-                                { v: "Sim", l: "Sim" },
-                                { v: "Não", l: "Não" },
-                              ]}
-                            />
-                          </Field>
-                          <Field label="Disjuntor De (atual)">
-                            <Sel
-                              value={u.disjDe}
-                              onChange={(e) =>
-                                setUcDet(ui, { disjDe: e.target.value })
-                              }
-                            >
-                              <option value="">Selecione…</option>
-                              {DISJ.map((d) => (
-                                <option key={d.fx} value={d.fx}>
-                                  {d.fx}
-                                </option>
-                              ))}
-                            </Sel>
-                          </Field>
-                        </React.Fragment>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </Card>
-              {ucsDet.length > 1 && (
-                <div
-                  className={
-                    "alert " +
-                    (validacaoDisjuntores.ok ? "alert-ok" : "alert-warn")
-                  }
-                >
-                  <b>
-                    Regra de disjuntores (múltiplas UCs sem proteção geral):
-                  </b>{" "}
-                  no máximo 1 tripolar de 63 A e/ou até 2 mono/bifásicos de 63
-                  A. {validacaoDisjuntores.ok ? "✔ " : "⚠ "}
-                  {validacaoDisjuntores.msg}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ===== CARGAS — COLETIVO: previsão digitada ===== */}
-          {aba === "cargas" && coletivo && !multiTorres && (
-            <Card
-              eyebrow="Carga do agrupamento"
-              title="Previsão de Carga"
-              sub="Informe a previsão de carga instalada por grupo (kW) e a demanda total prevista (kVA). Valores digitados — sem detalhamento por equipamento."
-            >
-              <div className="prev-carga">
-                <Field label="Iluminação (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.ilum}
-                    onChange={(e) => setPrev({ ...prev, ilum: e.target.value })}
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Tomada (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.tomada}
-                    onChange={(e) =>
-                      setPrev({ ...prev, tomada: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Chuveiro (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.chuveiro}
-                    onChange={(e) =>
-                      setPrev({ ...prev, chuveiro: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Ar Cond. (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.ar}
-                    onChange={(e) => setPrev({ ...prev, ar: e.target.value })}
-                    placeholder="0,0"
-                  />
-                </Field>
-                <Field label="Outros (kW)">
-                  <Inp
-                    type="number"
-                    value={prev.outros}
-                    onChange={(e) =>
-                      setPrev({ ...prev, outros: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </Field>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <Field label="Descrição (Outros)">
-                  <Inp
-                    value={prev.outrosDesc}
-                    onChange={(e) =>
-                      setPrev({ ...prev, outrosDesc: e.target.value })
-                    }
-                    placeholder="Outros itens nas UCs"
-                  />
-                </Field>
-              </div>
-              <div className="prev-total">
-                <div className="kpi">
-                  <div className="kpi-label">Total Carga Instalada</div>
-                  <div className="kpi-value">{fmt2(prevTotalKw)} kW</div>
-                </div>
-                <div className="kpi" style={{ flex: 1.4 }}>
-                  <div className="kpi-label">Demanda prevista (kVA) *</div>
-                  <Inp
-                    type="number"
-                    value={prev.demanda}
-                    onChange={(e) =>
-                      setPrev({ ...prev, demanda: e.target.value })
-                    }
-                    placeholder="0,0"
-                  />
-                </div>
-                <div className="kpi dark">
-                  <div className="kpi-label">Demanda do atendimento</div>
-                  <div className="kpi-value" style={{ fontSize: 18 }}>
-                    {fmt2(demandaTotalGeral)} kVA
-                  </div>
-                </div>
-              </div>
-              {demandaTotalGeral > 304 && (
-                <div className="alert alert-info" style={{ marginTop: 14 }}>
-                  Demanda total acima de 304 kVA: o atendimento fica
-                  condicionado à apresentação do projeto elétrico com ART/TRT.
-                </div>
-              )}
-            </Card>
-          )}
-
-          {/* ===== CARGAS — INDIVIDUAL: calculadora POR UC ===== */}
-          {aba === "cargas" && !coletivo && (
-            <div>
-              {ucsDet.length > 1 && (
-                <div
-                  className={
-                    "alert " +
-                    (validacaoDisjuntores.ok ? "alert-ok" : "alert-warn")
-                  }
-                >
-                  <b>Regra de disjuntores:</b> máx. 1 tripolar 63 A e/ou 2
-                  mono/bifásicos 63 A. {validacaoDisjuntores.ok ? "✔ " : "⚠ "}
-                  {validacaoDisjuntores.msg}
-                </div>
-              )}
-              {ucsDet.map((u, ui) => (
-                <Card
-                  key={ui}
-                  eyebrow={`UC ${ui + 1} de ${ucsDet.length}`}
-                  title={`Cargas da Unidade Consumidora ${ui + 1}`}
-                  sub="Detalhe os equipamentos. A demanda e o disjuntor são calculados automaticamente (ND-5.1)."
-                >
-                  <CalcDemanda
-                    data={u.cargas}
-                    onChange={(c) => setUcDet(ui, { cargas: c })}
-                    redeMono={redeMono}
-                  />
-                  <div className="kpi-row" style={{ marginTop: 12 }}>
+                  <div className="prev-total" style={{ marginTop: 14 }}>
                     <div className="kpi">
-                      <div className="kpi-label">Carga Instalada</div>
-                      <div className="kpi-value">
-                        {fmt2(u.cargas?._cargaKw || 0)} kW
-                      </div>
-                    </div>
-                    <div className="kpi">
-                      <div className="kpi-label">Demanda Calculada</div>
-                      <div className="kpi-value">
-                        {fmt2(u.cargas?._demanda || 0)} kVA
-                      </div>
+                      <div className="kpi-label">Total Carga Instalada</div>
+                      <div className="kpi-value">{fmt2(prevTotalKw)} kW</div>
                     </div>
                     <div className="kpi dark">
-                      <div className="kpi-label">Disjuntor Sugerido</div>
-                      <div className="kpi-value">
-                        {u.cargas?._disjuntores?.length
-                          ? u.cargas._disjuntores.join(" · ")
-                          : "—"}
+                      <div className="kpi-label">Demanda do atendimento</div>
+                      <div className="kpi-value" style={{ fontSize: 18 }}>
+                        {fmt2(demandaTotalGeral)} kVA
                       </div>
                     </div>
                   </div>
-                  {u.cargas?._disjuntores?.length > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <Field label={`Disjuntor escolhido para a UC ${ui + 1}`}>
-                        <Sel
-                          value={u.disjEscolhido || u.cargas._disjuntores[0]}
-                          onChange={(e) =>
-                            setUcDet(ui, { disjEscolhido: e.target.value })
-                          }
-                        >
-                          {u.cargas._disjuntores.map((dj) => (
-                            <option key={dj} value={dj}>
-                              {dj}
-                            </option>
-                          ))}
-                        </Sel>
-                      </Field>
+                  {demandaTotalGeral > 304 && (
+                    <div className="alert alert-info" style={{ marginTop: 14 }}>
+                      Demanda total acima de 304 kVA: o atendimento fica
+                      condicionado à apresentação do projeto elétrico com
+                      ART/TRT.
                     </div>
                   )}
                 </Card>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* ===== GERADOR (individual) ===== */}
-          {aba === "gerador" && !coletivo && (
-            <Card
-              eyebrow="Complementar"
-              title="Gerador de Emergência"
-              sub="Informe se a instalação possui gerador de emergência."
-            >
-              <Field label="Há gerador de emergência?" req>
-                <Toggle
-                  value={gerador.possui}
-                  onChange={(v) => setGerador({ ...gerador, possui: v })}
-                  options={[
-                    { v: "Sim", l: "Sim" },
-                    { v: "Não", l: "Não" },
-                  ]}
-                />
-              </Field>
-              {gerador.possui === "Sim" && (
-                <div className="grid grid-2" style={{ marginTop: 14 }}>
-                  <Field label="Potência do gerador (kVA)">
-                    <Inp
-                      value={gerador.potencia}
-                      onChange={(e) =>
-                        setGerador({ ...gerador, potencia: e.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Fonte / Combustível">
-                    <Sel
-                      value={gerador.fonte}
-                      onChange={(e) =>
-                        setGerador({ ...gerador, fonte: e.target.value })
+              {/* ===== CARGAS — INDIVIDUAL: calculadora POR UC ===== */}
+              {aba === "cargas" && !coletivo && (
+                <div>
+                  {ucsDet.length > 1 && (
+                    <div
+                      className={
+                        "alert " +
+                        (validacaoDisjuntores.ok ? "alert-ok" : "alert-warn")
                       }
                     >
-                      <option value="">Selecione</option>
-                      <option>Diesel</option>
-                      <option>Gasolina</option>
-                      <option>Gás (GLP/GNV)</option>
-                      <option>Outro</option>
-                    </Sel>
-                  </Field>
-                  <Field label="Descrição / Observações do gerador" span={2}>
-                    <Inp
-                      value={gerador.descricao}
-                      onChange={(e) =>
-                        setGerador({ ...gerador, descricao: e.target.value })
-                      }
-                      placeholder="Modelo, finalidade, regime de operação..."
-                    />
-                  </Field>
-                  <div className="col-span-2 callout">
-                    O gerador de emergência opera de forma isolada (sem
-                    paralelismo com a rede CEMIG). Caso haja paralelismo ou
-                    injeção, o atendimento deve ser tratado como Geração
-                    Distribuída.
-                  </div>
+                      <b>Regra de disjuntores:</b> máx. 1 tripolar 63 A e/ou 2
+                      mono/bifásicos 63 A.{" "}
+                      {validacaoDisjuntores.ok ? "✔ " : "⚠ "}
+                      {validacaoDisjuntores.msg}
+                    </div>
+                  )}
+                  {ucsDet.map((u, ui) => (
+                    <Card
+                      key={ui}
+                      eyebrow={`UC ${ui + 1} de ${ucsDet.length}`}
+                      title={`Cargas da Unidade Consumidora ${ui + 1}`}
+                      sub="Detalhe os equipamentos. A demanda e o disjuntor são calculados automaticamente (ND-5.1)."
+                    >
+                      <CalcDemanda
+                        data={u.cargas}
+                        onChange={(c) => setUcDet(ui, { cargas: c })}
+                        redeMono={redeMono}
+                      />
+                      <div className="kpi-row" style={{ marginTop: 12 }}>
+                        <div className="kpi">
+                          <div className="kpi-label">Carga Instalada</div>
+                          <div className="kpi-value">
+                            {fmt2(u.cargas?._cargaKw || 0)} kW
+                          </div>
+                        </div>
+                        <div className="kpi">
+                          <div className="kpi-label">Demanda Calculada</div>
+                          <div className="kpi-value">
+                            {fmt2(u.cargas?._demanda || 0)} kVA
+                          </div>
+                        </div>
+                        <div className="kpi dark">
+                          <div className="kpi-label">Disjuntor Sugerido</div>
+                          <div className="kpi-value">
+                            {u.cargas?._disjuntores?.length
+                              ? u.cargas._disjuntores.join(" · ")
+                              : "—"}
+                          </div>
+                        </div>
+                      </div>
+                      {u.cargas?._disjuntores?.length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <Field
+                            label={`Disjuntor escolhido para a UC ${ui + 1}`}
+                          >
+                            <Sel
+                              value={
+                                u.disjEscolhido || u.cargas._disjuntores[0]
+                              }
+                              onChange={(e) =>
+                                setUcDet(ui, { disjEscolhido: e.target.value })
+                              }
+                            >
+                              {u.cargas._disjuntores.map((dj) => (
+                                <option key={dj} value={dj}>
+                                  {dj}
+                                </option>
+                              ))}
+                            </Sel>
+                          </Field>
+                        </div>
+                      )}
+                    </Card>
+                  ))}
                 </div>
               )}
-            </Card>
-          )}
 
-          {/* ===== OBSERVAÇÕES ===== */}
-          {aba === "obs" && (
-            <Card
-              eyebrow="Informações adicionais"
-              title="Observações"
-              sub="Inclua informações relevantes: justificativa de disjuntor, atendimento híbrido, geração já conectada, etc."
-            >
-              <Field>
-                <textarea
-                  value={obs}
-                  onChange={(e) => setObs(e.target.value)}
-                  rows={6}
-                />
-              </Field>
-            </Card>
-          )}
+              {/* ===== GERADOR (individual) ===== */}
+              {aba === "gerador" && !coletivo && (
+                <Card
+                  eyebrow="Complementar"
+                  title="Gerador de Emergência"
+                  sub="Informe se a instalação possui gerador de emergência."
+                >
+                  <Field label="Há gerador de emergência?" req>
+                    <Toggle
+                      value={gerador.possui}
+                      onChange={(v) => setGerador({ ...gerador, possui: v })}
+                      options={[
+                        { v: "Sim", l: "Sim" },
+                        { v: "Não", l: "Não" },
+                      ]}
+                    />
+                  </Field>
+                  {gerador.possui === "Sim" && (
+                    <div className="grid grid-2" style={{ marginTop: 14 }}>
+                      <Field label="Potência do gerador (kVA)">
+                        <Inp
+                          value={gerador.potencia}
+                          onChange={(e) =>
+                            setGerador({ ...gerador, potencia: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label="Fonte / Combustível">
+                        <Sel
+                          value={gerador.fonte}
+                          onChange={(e) =>
+                            setGerador({ ...gerador, fonte: e.target.value })
+                          }
+                        >
+                          <option value="">Selecione</option>
+                          <option>Diesel</option>
+                          <option>Gasolina</option>
+                          <option>Gás (GLP/GNV)</option>
+                          <option>Outro</option>
+                        </Sel>
+                      </Field>
+                      <Field
+                        label="Descrição / Observações do gerador"
+                        span={2}
+                      >
+                        <Inp
+                          value={gerador.descricao}
+                          onChange={(e) =>
+                            setGerador({
+                              ...gerador,
+                              descricao: e.target.value,
+                            })
+                          }
+                          placeholder="Modelo, finalidade, regime de operação..."
+                        />
+                      </Field>
+                      <div className="col-span-2 callout">
+                        O gerador de emergência opera de forma isolada (sem
+                        paralelismo com a rede CEMIG). Caso haja paralelismo ou
+                        injeção, o atendimento deve ser tratado como Geração
+                        Distribuída.
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              )}
 
-          {/* ===== PRÉVIA & PDF ===== */}
-          {aba === "revisar" && (
-            <div>
-              <Card
-                eyebrow="Etapa final"
-                title="Prévia do Formulário"
-                sub="Confira os dados. Se algo estiver incorreto, volte às etapas anteriores pela barra lateral."
-              >
-                <div className="kpi-row">
-                  <div className="kpi">
-                    <div className="kpi-label">Proprietário</div>
-                    <div className="kpi-value" style={{ fontSize: 14 }}>
-                      {prop.nome || "—"}
+              {/* ===== OBSERVAÇÕES ===== */}
+              {aba === "obs" && (
+                <Card
+                  eyebrow="Informações adicionais"
+                  title="Observações"
+                  sub="Inclua informações relevantes: justificativa de disjuntor, atendimento híbrido, geração já conectada, etc."
+                >
+                  <Field>
+                    <textarea
+                      value={obs}
+                      onChange={(e) => setObs(e.target.value)}
+                      rows={6}
+                    />
+                  </Field>
+                </Card>
+              )}
+
+              {/* ===== PRÉVIA & PDF ===== */}
+              {aba === "revisar" && (
+                <div>
+                  <Card
+                    eyebrow="Etapa final"
+                    title="Prévia do Formulário"
+                    sub="Confira os dados. Se algo estiver incorreto, volte às etapas anteriores pela barra lateral."
+                  >
+                    <div className="kpi-row">
+                      <div className="kpi">
+                        <div className="kpi-label">Proprietário</div>
+                        <div className="kpi-value" style={{ fontSize: 14 }}>
+                          {prop.nome || "—"}
+                        </div>
+                      </div>
+                      <div className="kpi">
+                        <div className="kpi-label">Unidades Consumidoras</div>
+                        <div className="kpi-value">
+                          {multiTorres
+                            ? totalUcsEmpreendimento
+                            : coletivo
+                              ? ucBlocos.length
+                              : ucsDet.length}
+                        </div>
+                      </div>
+                      <div className="kpi dark">
+                        <div className="kpi-label">Demanda Total</div>
+                        <div className="kpi-value" style={{ fontSize: 18 }}>
+                          {fmt2(demandaTotalGeral)} kVA
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpi-label">Unidades Consumidoras</div>
-                    <div className="kpi-value">
-                      {multiTorres
-                        ? totalUcsEmpreendimento
-                        : coletivo
-                          ? ucBlocos.length
-                          : ucsDet.length}
-                    </div>
-                  </div>
-                  <div className="kpi dark">
-                    <div className="kpi-label">Demanda Total</div>
-                    <div className="kpi-value" style={{ fontSize: 18 }}>
-                      {fmt2(demandaTotalGeral)} kVA
-                    </div>
-                  </div>
-                </div>
-                <div className="preview-block">
-                  <h4>Modalidade</h4>
-                  <div className="preview-item">
-                    <span className="v">
-                      {multiTorres
-                        ? `Múltiplas Torres/Blocos · ${blocos.length} ${atend.atendA.toLowerCase()}(s)`
-                        : coletivo
-                          ? "Coletivo — Agrupamento com Proteção Geral (APR Web)"
-                          : "Individual / até 3 caixas sem proteção geral"}
-                      {coletivo
-                        ? ` · ${atend.solicitacao} · ${atend.escopo}`
-                        : ""}
-                      {!multiTorres && atend.disjuntorGeral
-                        ? ` · Disjuntor geral: ${atend.disjuntorGeral}`
-                        : ""}
-                    </span>
-                  </div>
-                </div>
-                <div className="preview-block">
-                  <h4>Obra</h4>
-                  <div className="preview-grid">
-                    <div className="preview-item">
-                      <span className="k">Endereço</span>
-                      <span className="v">
-                        {obra.endereco || "—"}, {obra.num || "s/n"}
-                      </span>
-                    </div>
-                    <div className="preview-item">
-                      <span className="k">Cidade / UF</span>
-                      <span className="v">
-                        {obra.cidade || "—"} / {obra.estado}
-                      </span>
-                    </div>
-                    <div className="preview-item">
-                      <span className="k">Localização</span>
-                      <span className="v">{obra.localizacao}</span>
-                    </div>
-                    <div className="preview-item">
-                      <span className="k">Coordenada</span>
-                      <span className="v">{obra.coordenada || "—"}</span>
-                    </div>
-                  </div>
-                </div>
-                {multiTorres ? (
-                  <div className="preview-block">
-                    <h4>Torres / Blocos</h4>
-                    {blocos.map((b, bi) => (
-                      <div
-                        key={bi}
-                        className="preview-item"
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
+                    <div className="preview-block">
+                      <h4>Modalidade</h4>
+                      <div className="preview-item">
                         <span className="v">
-                          {atend.atendA} {b.nome || bi + 1} · {b.qtdUCs || 0}{" "}
-                          UCs · Geral: {b.disjGeral || "—"} · Incêndio:{" "}
-                          {b.disjIncendio || "—"}
-                        </span>
-                        <span
-                          style={{ color: "var(--verde)", fontWeight: 700 }}
-                        >
-                          {fmt2(num(b.demandaBloco) + num(b.demandaIncendio))}{" "}
-                          kVA
+                          {multiTorres
+                            ? `Múltiplas Torres/Blocos · ${blocos.length} ${atend.atendA.toLowerCase()}(s)`
+                            : coletivo
+                              ? "Coletivo — Agrupamento com Proteção Geral (APR Web)"
+                              : "Individual / até 3 caixas sem proteção geral"}
+                          {coletivo
+                            ? ` · ${atend.solicitacao} · ${atend.escopo}`
+                            : ""}
+                          {!multiTorres && atend.disjuntorGeral
+                            ? ` · Disjuntor geral: ${atend.disjuntorGeral}`
+                            : ""}
                         </span>
                       </div>
-                    ))}
-                  </div>
-                ) : coletivo ? (
-                  <div className="preview-block">
-                    <h4>Previsão de carga e UCs</h4>
-                    <div className="preview-item">
-                      <span className="v">
-                        Total {fmt2(prevTotalKw)} kW · Demanda{" "}
-                        {fmt2(demandaTotalGeral)} kVA
-                      </span>
                     </div>
-                    {ucBlocos.map((u, ui) => (
-                      <div
-                        key={ui}
-                        className="preview-item"
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <span className="v">
-                          {u.identificacao || `UC ${ui + 1}`} · {u.atividade} ·{" "}
-                          {u.solicitacao}{" "}
-                          {u.complemento ? `· ${u.complemento}` : ""}
-                        </span>
-                        <span
-                          style={{ color: "var(--verde)", fontWeight: 700 }}
-                        >
-                          {u.disjPara || "—"}
-                        </span>
+                    <div className="preview-block">
+                      <h4>Obra</h4>
+                      <div className="preview-grid">
+                        <div className="preview-item">
+                          <span className="k">Endereço</span>
+                          <span className="v">
+                            {obra.endereco || "—"}, {obra.num || "s/n"}
+                          </span>
+                        </div>
+                        <div className="preview-item">
+                          <span className="k">Cidade / UF</span>
+                          <span className="v">
+                            {obra.cidade || "—"} / {obra.estado}
+                          </span>
+                        </div>
+                        <div className="preview-item">
+                          <span className="k">Localização</span>
+                          <span className="v">{obra.localizacao}</span>
+                        </div>
+                        <div className="preview-item">
+                          <span className="k">Coordenada</span>
+                          <span className="v">{obra.coordenada || "—"}</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="preview-block">
-                    <h4>Unidades Consumidoras</h4>
-                    {ucsDet.map((u, ui) => (
-                      <div
-                        key={ui}
-                        className="preview-item"
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <span className="v">
-                          UC {ui + 1} · {u.atividade} · {u.solicitacao}{" "}
-                          {u.complemento ? `· ${u.complemento}` : ""}
-                        </span>
-                        <span
-                          style={{ color: "var(--verde)", fontWeight: 700 }}
-                        >
-                          {fmt2(u.cargas?._demanda || 0)} kVA ·{" "}
-                          {u.disjEscolhido ||
-                            (u.cargas?._disjuntores || [])[0] ||
-                            "—"}
-                        </span>
+                    </div>
+                    {multiTorres ? (
+                      <div className="preview-block">
+                        <h4>Torres / Blocos</h4>
+                        {blocos.map((b, bi) => (
+                          <div
+                            key={bi}
+                            className="preview-item"
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <span className="v">
+                              {atend.atendA} {b.nome || bi + 1} ·{" "}
+                              {b.qtdUCs || 0} UCs · Geral: {b.disjGeral || "—"}{" "}
+                              · Incêndio: {b.disjIncendio || "—"}
+                            </span>
+                            <span
+                              style={{ color: "var(--verde)", fontWeight: 700 }}
+                            >
+                              {fmt2(
+                                num(b.demandaBloco) + num(b.demandaIncendio),
+                              )}{" "}
+                              kVA
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-              <Card sub="Anexe à solicitação: planta de situação (A4), ART/TRT de projeto (quando aplicável) e documentos de regularidade do imóvel, conforme as orientações da CEMIG.">
-                <Btn variant="dark" onClick={gerarPDF}>
-                  📄 Exportar PDF
+                    ) : coletivo ? (
+                      <div className="preview-block">
+                        <h4>Previsão de carga e UCs</h4>
+                        <div className="preview-item">
+                          <span className="v">
+                            Total {fmt2(prevTotalKw)} kW · Demanda{" "}
+                            {fmt2(demandaTotalGeral)} kVA
+                          </span>
+                        </div>
+                        {ucBlocos.map((u, ui) => (
+                          <div
+                            key={ui}
+                            className="preview-item"
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <span className="v">
+                              {u.identificacao || `UC ${ui + 1}`} ·{" "}
+                              {u.atividade} · {u.solicitacao}{" "}
+                              {u.complemento ? `· ${u.complemento}` : ""}
+                            </span>
+                            <span
+                              style={{ color: "var(--verde)", fontWeight: 700 }}
+                            >
+                              {u.disjPara || "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="preview-block">
+                        <h4>Unidades Consumidoras</h4>
+                        {ucsDet.map((u, ui) => (
+                          <div
+                            key={ui}
+                            className="preview-item"
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <span className="v">
+                              UC {ui + 1} · {u.atividade} · {u.solicitacao}{" "}
+                              {u.complemento ? `· ${u.complemento}` : ""}
+                            </span>
+                            <span
+                              style={{ color: "var(--verde)", fontWeight: 700 }}
+                            >
+                              {fmt2(u.cargas?._demanda || 0)} kVA ·{" "}
+                              {u.disjEscolhido ||
+                                (u.cargas?._disjuntores || [])[0] ||
+                                "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                  <Card sub="Anexe à solicitação: planta de situação (A4), ART/TRT de projeto (quando aplicável) e documentos de regularidade do imóvel, conforme as orientações da CEMIG.">
+                    <Btn variant="dark" onClick={gerarPDF}>
+                      📄 Exportar PDF
+                    </Btn>
+                  </Card>
+                </div>
+              )}
+
+              {/* ===== NAVEGAÇÃO ===== */}
+              <div className="nav-bottom">
+                <Btn variant="ghost" onClick={irAnt} disabled={idx <= 0}>
+                  ← Voltar
                 </Btn>
-              </Card>
-            </div>
-          )}
-
-          {/* ===== NAVEGAÇÃO ===== */}
-          <div className="nav-bottom">
-            <Btn variant="ghost" onClick={irAnt} disabled={idx <= 0}>
-              ← Voltar
-            </Btn>
-            <span className="nav-step-info">
-              Etapa {Math.max(idx, 0) + 1} de {abas.length}
-            </span>
-            {aba === "revisar" ? (
-              <Btn variant="primary" onClick={gerarPDF}>
-                📄 Exportar PDF
-              </Btn>
-            ) : (
-              <Btn variant="primary" onClick={irProx}>
-                Avançar →
-              </Btn>
-            )}
+                <span className="nav-step-info">
+                  Etapa {Math.max(idx, 0) + 1} de {abas.length}
+                </span>
+                {aba === "revisar" ? (
+                  <Btn variant="primary" onClick={gerarPDF}>
+                    📄 Exportar PDF
+                  </Btn>
+                ) : (
+                  <Btn variant="primary" onClick={irProx}>
+                    Avançar →
+                  </Btn>
+                )}
+              </div>
+            </main>
           </div>
-        </main>
-      </div>
 
-      <div className="footer">
-        Documento gerado eletronicamente · não substitui o formulário oficial
-        CEMIG ·
-        <a
-          href="https://www.cemig.com.br/como-solicitar-os-principais-servicos/ligacao-nova-e-aumento-de-carga/ligacao-nova-ou-alteracao-de-carga-para-demandas-especificas/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {" "}
-          Saiba mais no portal Cemig
-        </a>
-      </div>
+          <div className="footer">
+            Documento gerado eletronicamente · não substitui o formulário
+            oficial CEMIG ·
+            <a
+              href="https://www.cemig.com.br/como-solicitar-os-principais-servicos/ligacao-nova-e-aumento-de-carga/ligacao-nova-ou-alteracao-de-carga-para-demandas-especificas/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {" "}
+              Saiba mais no portal Cemig
+            </a>
+          </div>
+        </React.Fragment>
+      )}
     </div>
   );
 }
