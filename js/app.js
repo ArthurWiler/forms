@@ -600,11 +600,11 @@ function App() {
       doc.setFillColor(1, 136, 55);
       doc.rect(0, 0, 4, 18, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
+      doc.setFontSize(14);
       doc.setTextColor(255, 255, 255);
       doc.text("Formulário CEMIG - Orçamento de Conexão BT", MG, 8);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
+      doc.setFontSize(12);
       doc.setTextColor(150, 210, 175);
       doc.text(
         multiTorres
@@ -621,11 +621,7 @@ function App() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(6.5);
       doc.setTextColor(150, 150, 150);
-      doc.text(
-        "Documento gerado eletronicamente - não substitui o formulário oficial CEMIG",
-        MG,
-        PH - 7,
-      );
+      doc.text("", MG, PH - 7);
     };
     const checkSpace = (h) => {
       if (cy + h > PH - 14) {
@@ -642,7 +638,7 @@ function App() {
       doc.setFillColor(1, 136, 55);
       doc.rect(MG, cy, 2.5, 7, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
+      doc.setFontSize(10);
       doc.setTextColor(0, 70, 33);
       doc.text(t, MG + 5, cy + 4.8);
       cy += 9;
@@ -655,11 +651,11 @@ function App() {
           if (!p) return;
           const x = MG + ci * colW;
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(7);
-          doc.setTextColor(110, 116, 130);
+          doc.setFontSize(9);
+          doc.setTextColor(30, 32, 42);
           doc.text(p[0] + ":", x + 1, cy + 3);
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(8);
+          doc.setFontSize(10);
           doc.setTextColor(30, 32, 42);
           doc.text(
             doc.splitTextToSize(String(p[1] || "—"), colW - 4)[0],
@@ -674,11 +670,11 @@ function App() {
       const lines = doc.splitTextToSize(String(val || "—"), CW - 4);
       checkSpace(5 + lines.length * 4);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
-      doc.setTextColor(110, 116, 130);
+      doc.setFontSize(9);
+      doc.setTextColor(30, 32, 42);
       doc.text(label + ":", MG + 1, cy + 3);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
+      doc.setFontSize(10);
       doc.setTextColor(30, 32, 42);
       doc.text(lines, MG + 1, cy + 7);
       cy += 5 + lines.length * 4;
@@ -688,7 +684,7 @@ function App() {
       doc.setFillColor(1, 136, 55);
       doc.rect(MG, cy, CW, 7.5, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
+      doc.setFontSize(10);
       doc.setTextColor(230, 249, 213);
       doc.text(label, MG + 5, cy + 5.2);
       doc.text(val, MG + CW - 2, cy + 5.2, { align: "right" });
@@ -699,7 +695,7 @@ function App() {
       doc.setFillColor(215, 218, 226);
       doc.rect(MG, cy, CW, 5.5, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(6.6);
+      doc.setFontSize(8);
       doc.setTextColor(90, 96, 115);
       let x = MG + 2;
       headers.forEach((h, i) => {
@@ -717,7 +713,7 @@ function App() {
         );
         doc.rect(MG, cy, CW, 5, "F");
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(7);
+        doc.setFontSize(8);
         doc.setTextColor(30, 32, 42);
         let xx = MG + 2;
         row.forEach((cell, i) => {
