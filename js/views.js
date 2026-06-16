@@ -1001,18 +1001,24 @@ function TabObra({ ctx }) {
       <LocalizacaoObra obra={obra} setObra={setObra} />
       <div className="field" style={{ marginTop: 14 }}>
         <label>Unidade consumidora em área de restrição ambiental?</label>
-        <div className="readonly-val">
-          {obra.restricaoAmbiental || "— consulte a coordenada no mapa"}
-        </div>
+        {!obra.restricaoAmbiental && (
+          <div className="alert alert-info">
+            Consulte a coordenada no mapa acima para verificar a restrição
+            ambiental.
+          </div>
+        )}
         {obra.restricaoAmbiental === "Sim" && (
-          <span className="field-hint">
-            {obra.restricoesTexto
-              ? "Restrições ambientais: " + obra.restricoesTexto
-              : "Há restrição ambiental."}
-          </span>
+          <div className="alert alert-warn restricao-destaque">
+            <strong>⚠ SIM — em área de restrição ambiental.</strong>
+            {obra.restricoesTexto && (
+              <div style={{ marginTop: 6 }}>{obra.restricoesTexto}</div>
+            )}
+          </div>
         )}
         {obra.restricaoAmbiental === "Não" && (
-          <span className="field-hint">Não há restrição ambiental.</span>
+          <div className="alert alert-ok restricao-destaque">
+            <strong>Não há restrição ambiental.</strong>
+          </div>
         )}
       </div>
       <div className="grid grid-2 divider">

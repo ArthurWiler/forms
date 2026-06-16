@@ -744,7 +744,7 @@ input[type="number"] { -moz-appearance: textfield; }
 
 /* Bloco de endereço da UC (segue Dados da Obra) */
 .uc-endereco {
-  border-top: 1px dashed var(--borda);
+  border-top: 1px solid var(--borda);
   padding-top: 12px;
 }
 
@@ -835,11 +835,11 @@ input[type="number"] { -moz-appearance: textfield; }
   align-items: center;
   min-height: 40px;
   padding: 8px 12px;
-  border: 1px dashed var(--verde-acento);
+  border: 1px solid var(--borda);
   border-radius: var(--raio-sm);
-  background: rgba(0, 168, 79, 0.06);
-  font-weight: 700;
-  color: var(--verde-escuro);
+  background: var(--input-bg);
+  color: var(--texto);
+  font-weight: 500;
 }
 
 /* ===== Mapa do endereço da obra (Leaflet) ===== */
@@ -900,4 +900,15 @@ input[type="number"] { -moz-appearance: textfield; }
   background: var(--amarelo-bg);
   border-color: var(--amarelo-bd);
   color: #8a6d1a;
+}
+
+/* Destaque do resultado de restrição ambiental (usa o padrão de alerts) */
+.restricao-destaque {
+  font-size: 14px;
+  padding: 12px 14px;
+  line-height: 1.45;
+}
+.restricao-destaque strong {
+  display: block;
+  font-size: 14.5px;
 }

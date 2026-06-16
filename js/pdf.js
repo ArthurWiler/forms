@@ -278,13 +278,17 @@ function gerarPdfDoc(S) {
   obraPairs.push(
     ["Coordenadas", [obra.lat, obra.lng].filter(Boolean).join(", ")],
     ["Padrão pronto p/ ligar?", obra.prontoLigar],
-    ["Em área de restrição ambiental?", obra.restricaoAmbiental],
-    ["Restrições ambientais", obra.restricoesTexto],
+    [
+      "Em área de restrição ambiental?",
+      obra.restricaoAmbiental || "Não consultada",
+    ],
     ["Tipo de rede BT", obra.tipoRede],
     ["Distância < 30 m da rede?", obra.distMenor30],
     ["Transformador próximo", obra.transformador],
   );
   kvPairs(obraPairs);
+  if (obra.restricaoAmbiental === "Sim" && obra.restricoesTexto)
+    fullLine("Restrições ambientais", obra.restricoesTexto);
   if (obra.localizacao === "Rural")
     kvPairs([
       ["Distrito/Comunidade", obra.distritoComunidade],
