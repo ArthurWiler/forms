@@ -141,18 +141,36 @@ function gerarPdfDoc(S) {
   };
   const fullLine = (label, val) => {
     if (_vazio(val)) return;
+    const lbl = label + ": ";
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(30, 32, 42);
-    const lbl = label + ": ";
     const lw = doc.getTextWidth(lbl);
     const lines = doc.splitTextToSize(String(val), Math.max(20, CW - 4 - lw));
     checkSpace(4 + lines.length * 4.2);
+    // re-aplica estilo após possível quebra de página (drawTopBar altera fonte/cor)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(30, 32, 42);
     doc.text(lbl, MG + 1, cy + 4.5);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(lines, MG + 1 + lw, cy + 4.5);
     cy += 2 + lines.length * 4.2;
+  };
+  // Data ISO (AAAA-MM-DD) -> BR (DD/MM/AAAA)
+  const dataBR = (s) => {
+    const m = String(s || "").match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    return m
+      ? `${m[3].padStart(2, "0")}/${m[2].padStart(2, "0")}/${m[1]}`
+      : s || "";
+  };
+  // Coordenada com até 6 casas decimais
+  const coordFmt = () => {
+    const f = (v) => {
+      const n = parseFloat(String(v).replace(",", "."));
+      return isNaN(n) ? null : n.toFixed(6);
+    };
+    return [f(obra.lat), f(obra.lng)].filter((x) => x !== null).join(", ");
   };
   const totRow = (label, val) => {
     checkSpace(8);
@@ -234,7 +252,7 @@ function gerarPdfDoc(S) {
 
   sec("1.  DADOS DO PROPRIETÁRIO");
   const propPairs = [
-    ["Nome Completo / Razão Social", prop.nome],
+    [pessoaFisica ? "Nome Completo" : "Razão Social", prop.nome],
     ["CPF/CNPJ", prop.cpfCnpj],
     ["E-mail", prop.email],
     ["Celular", prop.celular],
@@ -244,7 +262,7 @@ function gerarPdfDoc(S) {
   if (pessoaFisica) {
     propPairs.push(
       ["RG/RNE/RANI", prop.rg],
-      ["Data Nasc.", prop.nasc],
+      ["Data Nasc.", dataBR(prop.nasc)],
       ["Filiação", prop.filiacao],
       ["Laudo médico", prop.laudoMedico],
       ["NIS Tarifa Social", prop.nis === "Sim" ? prop.numNis : "Não"],
@@ -261,33 +279,51 @@ function gerarPdfDoc(S) {
     ["Conta globalizada", corr.contaGlobal],
     ["", ""],
   ]);
-  if (corr.receberEmail === "Não")
-    kvPairs([
-      ["Rua/Av", corr.rua],
-      ["Nº", corr.num],
-      ["Bairro/Distrito", corr.bairro],
-      ["Complemento", corr.compl],
-      ["Município", corr.municipio],
-      ["CEP", corr.cep],
-      ["Estado", corr.estado],
-      ["", ""],
-    ]);
+  if (corr.receberEmail === "Não") {
+    if (corr.alternativa === "Outro e-mail") {
+      fullLine("E-mail alternativo para a fatura", corr.outroEmail);
+    } else if (corr.alternativa === "Mesmo da obra") {
+      const endO = [
+        [obra.endereco, obra.num].filter(Boolean).join(", "),
+        obra.compl,
+        obra.bairro,
+        [obra.cidade, obra.estado].filter(Boolean).join("/"),
+        obra.cep ? "CEP " + obra.cep : "",
+      ]
+        .filter(Boolean)
+        .join(" - ");
+      fullLine("Endereço de correspondência", "Mesmo da obra — " + endO);
+    } else {
+      const endC = [
+        [corr.rua, corr.num].filter(Boolean).join(", "),
+        corr.compl,
+        corr.bairro,
+        corr.municipio,
+        corr.estado,
+        corr.cep ? "CEP " + corr.cep : "",
+      ]
+        .filter(Boolean)
+        .join(" - ");
+      fullLine("Endereço de correspondência", endC);
+    }
+  }
   cy += 2;
 
   sec("3.  DADOS DA OBRA (PADRÃO DE ENTRADA)");
-  const obraPairs = [
-    ["Endereço", obra.endereco],
-    ["Nº", obra.num],
-    ["Complemento", obra.compl],
-    ["Bairro", obra.bairro],
-    ["Cidade", obra.cidade],
-    ["Estado", obra.estado],
-    ["CEP", obra.cep],
-    ["Localização", obra.localizacao],
-  ];
+  const endObra = [
+    [obra.endereco, obra.num].filter(Boolean).join(", "),
+    obra.compl,
+    obra.bairro,
+    [obra.cidade, obra.estado].filter(Boolean).join("/"),
+    obra.cep ? "CEP " + obra.cep : "",
+  ]
+    .filter(Boolean)
+    .join(" - ");
+  fullLine("Endereço", endObra);
+  const obraPairs = [["Localização", obra.localizacao]];
   if (coletivo) obraPairs.push(["Nº ART/TRT de Projeto", obra.art]);
   obraPairs.push(
-    ["Coordenadas", [obra.lat, obra.lng].filter(Boolean).join(", ")],
+    ["Coordenadas", coordFmt()],
     ["Padrão pronto p/ ligar?", obra.prontoLigar],
     [
       "Em área de restrição ambiental?",
@@ -414,9 +450,9 @@ function gerarPdfDoc(S) {
       if (hibrido) pares.unshift(["Norma", `ND ${u.nd}`]);
       if (u.solicitacao !== "Conexão Nova") {
         pares.push(["Instalação", u.instalacao]);
-        pares.push(["Disjuntor De", u.disjDe]);
+        pares.push(["Disjuntor atual", u.disjDe]);
       }
-      pares.push(["Disjuntor Para", u.disjPara]);
+      pares.push(["Disjuntor", u.disjPara]);
       kvPairs(pares);
       cy += 1;
     });

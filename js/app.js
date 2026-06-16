@@ -48,6 +48,8 @@ function App() {
   const [corr, setCorr] = useState({
     vencimento: "",
     receberEmail: "Sim",
+    alternativa: "Endereço novo", // quando não recebe no e-mail informado
+    outroEmail: "",
     rua: "",
     bairro: "",
     num: "",
@@ -512,6 +514,62 @@ function App() {
   const coordPreenchida =
     !!String(obra.lat).trim() && !!String(obra.lng).trim();
 
+  // Validação de campos obrigatórios para liberar o PDF (revisar/expandir depois)
+  const validacaoObrigatorios = useMemo(() => {
+    const faltando = [];
+    const req = (v, label) => {
+      if (!String(v == null ? "" : v).trim()) faltando.push(label);
+    };
+    // Proprietário
+    req(
+      prop.nome,
+      pessoaFisica ? "Nome completo do proprietário" : "Razão social",
+    );
+    req(prop.cpfCnpj, "CPF/CNPJ");
+    req(prop.email, "E-mail");
+    req(prop.celular, "Celular");
+    // Correspondência (quando não recebe no e-mail informado)
+    if (corr.receberEmail === "Não") {
+      if (corr.alternativa === "Outro e-mail")
+        req(corr.outroEmail, "E-mail alternativo da fatura");
+      else if (corr.alternativa === "Endereço novo") {
+        req(corr.cep, "CEP de correspondência");
+        req(corr.rua, "Rua/Av. de correspondência");
+        req(corr.num, "Nº de correspondência");
+        req(corr.bairro, "Bairro de correspondência");
+        req(corr.municipio, "Município de correspondência");
+      }
+    }
+    // Obra
+    req(obra.endereco, "Endereço da obra");
+    req(obra.num, "Nº da obra");
+    req(obra.bairro, "Bairro da obra");
+    req(obra.cidade, "Cidade da obra");
+    req(obra.cep, "CEP da obra");
+    if (coordObrigatoria && !coordPreenchida)
+      faltando.push("Coordenada (latitude/longitude) da obra");
+    // Carga declarada
+    if (!(demandaTotalGeral > 0))
+      faltando.push("Previsão de carga / demanda das UCs");
+    // Validações específicas já existentes
+    if (hibrido && !validacaoHibrido.ok)
+      faltando.push("Pendências do atendimento híbrido");
+    if (validacaoDisjuntores && validacaoDisjuntores.ok === false)
+      faltando.push("Combinação de disjuntores inválida");
+    return { ok: faltando.length === 0, faltando };
+  }, [
+    prop,
+    corr,
+    obra,
+    coordObrigatoria,
+    coordPreenchida,
+    demandaTotalGeral,
+    pessoaFisica,
+    hibrido,
+    validacaoHibrido,
+    validacaoDisjuntores,
+  ]);
+
   // ===== ABAS (barra vertical) — UCs vem ANTES de Cargas =====
   const abas = [
     { k: "orient", l: "Orientações" },
@@ -548,7 +606,11 @@ function App() {
   // GERAR PDF
   // ============================================================
   // Geração do PDF delegada a js/pdf.js (gerarPdfDoc)
-  const gerarPDF = () =>
+  const gerarPDF = () => {
+    if (!validacaoObrigatorios.ok) {
+      setAba("revisar");
+      return;
+    }
     gerarPdfDoc({
       multiTorres,
       coletivo,
@@ -570,6 +632,7 @@ function App() {
       logoPDF,
       pessoaFisica,
     });
+  };
 
   // ============================================================
   // RENDER
@@ -642,6 +705,7 @@ function App() {
     trocaDisjGeral,
     validacaoDisjuntores,
     validacaoHibrido,
+    validacaoObrigatorios,
   };
 
   return (
