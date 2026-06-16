@@ -5,7 +5,9 @@ const { useState, useMemo, useCallback, useRef, useEffect } = React;
 
 // Logo Cemig (imagem fornecida em imgs/logo-cemig.png)
 function LogoCemig() {
-  return <img src="imgs/logo-cemig.png" alt="Cemig" className="logo-img" />;
+  return (
+    <img src="imgs/logo-cemig-branca.png" alt="Cemig" className="logo-img" />
+  );
 }
 
 // Campo de formulário

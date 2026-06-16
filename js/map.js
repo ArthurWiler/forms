@@ -229,11 +229,6 @@ function LocalizacaoObra({ obra, setObra }) {
             {status}
           </span>
         )}
-        {coords && (
-          <span className="field-hint">
-            {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
-          </span>
-        )}
       </div>
       <div ref={divRef} className="mapa-canvas" />
     </div>

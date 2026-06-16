@@ -96,7 +96,7 @@ const ucBlocoPadrao = (i) => ({
   nPredial: "",
   complemento: "",
   caixa: "",
-  solicitacao: "",
+  solicitacao: "Conexão Nova",
   mudancaLocal: "",
   atividade: "",
   ramo: "",
@@ -126,7 +126,7 @@ const prevKwUC = (u) =>
 
 // UC detalhada (individual) — identificação + calculadora
 const ucDetalhadaPadrao = () => ({
-  solicitacao: "",
+  solicitacao: "Conexão Nova",
   atividade: "",
   ramo: "",
   nPredial: "",
@@ -146,7 +146,7 @@ const ucTorrePadrao = (i) => ({
   nPredial: "",
   complemento: "",
   caixa: "",
-  solicitacao: "",
+  solicitacao: "Conexão Nova",
   atividade: "",
   ramo: "",
   instalacao: "",

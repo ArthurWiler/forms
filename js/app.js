@@ -19,7 +19,7 @@ function App() {
     biAcima63: false,
     triAcima63: false,
     acima75: false,
-    solicitacao: SOLICITACOES[1], // padrão (coletivo)
+    solicitacao: SOLICITACOES[0], // padrão (coletivo)
     escopo: "Ligação Nova", // padrão
     disjuntorGeral: "",
     disjGeralAtual: "", // disjuntor geral existente (alteração de carga com troca)

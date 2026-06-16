@@ -959,6 +959,28 @@ function TabObra({ ctx }) {
         </div>
       )}
       <div className="grid grid-2 divider">
+        <Field
+          label={coordObrigatoria ? "Latitude" : "Latitude — opcional"}
+          req={coordObrigatoria}
+        >
+          <Inp
+            value={obra.lat}
+            onChange={(e) => setObra({ ...obra, lat: e.target.value })}
+            placeholder=""
+          />
+        </Field>
+        <Field
+          label={coordObrigatoria ? "Longitude" : "Longitude — opcional"}
+          req={coordObrigatoria}
+        >
+          <Inp
+            value={obra.lng}
+            onChange={(e) => setObra({ ...obra, lng: e.target.value })}
+            placeholder=""
+          />
+        </Field>
+      </div>
+      <div className="grid grid-2 divider">
         <Field label="Distância padrão→rede CEMIG inferior a 30 m?">
           <Toggle
             value={obra.distMenor30}
@@ -969,26 +991,32 @@ function TabObra({ ctx }) {
             ]}
           />
         </Field>
-        <Field
-          label={coordObrigatoria ? "Latitude" : "Latitude — opcional"}
-          req={coordObrigatoria}
-          hint="Aceita ponto ou vírgula. Ex: -19.9123"
-        >
-          <Inp
-            value={obra.lat}
-            onChange={(e) => setObra({ ...obra, lat: e.target.value })}
-            placeholder="-19.9123"
+        <Field label="O padrão está pronto para ser ligado?" req>
+          <Toggle
+            value={obra.prontoLigar}
+            onChange={(v) => setObra({ ...obra, prontoLigar: v })}
+            options={[
+              { v: "Sim", l: "Sim" },
+              { v: "Não", l: "Não" },
+            ]}
           />
         </Field>
-        <Field
-          label={coordObrigatoria ? "Longitude" : "Longitude — opcional"}
-          req={coordObrigatoria}
-          hint="Aceita ponto ou vírgula. Ex: -43.9385"
-        >
+        <Field label="Tipo de rede BT que atende o local">
+          <Sel
+            value={obra.tipoRede}
+            onChange={(e) => setObra({ ...obra, tipoRede: e.target.value })}
+          >
+            <option>Monofásica</option>
+            <option>Bifásica</option>
+            <option>Trifásica</option>
+          </Sel>
+        </Field>
+        <Field label="Código do transformador mais próximo">
           <Inp
-            value={obra.lng}
-            onChange={(e) => setObra({ ...obra, lng: e.target.value })}
-            placeholder="-43.9385"
+            value={obra.transformador}
+            onChange={(e) =>
+              setObra({ ...obra, transformador: e.target.value })
+            }
           />
         </Field>
       </div>
@@ -1020,36 +1048,6 @@ function TabObra({ ctx }) {
             <strong>Não há restrição ambiental.</strong>
           </div>
         )}
-      </div>
-      <div className="grid grid-2 divider">
-        <Field label="O padrão está pronto para ser ligado?" req>
-          <Toggle
-            value={obra.prontoLigar}
-            onChange={(v) => setObra({ ...obra, prontoLigar: v })}
-            options={[
-              { v: "Sim", l: "Sim" },
-              { v: "Não", l: "Não" },
-            ]}
-          />
-        </Field>
-        <Field label="Tipo de rede BT que atende o local">
-          <Sel
-            value={obra.tipoRede}
-            onChange={(e) => setObra({ ...obra, tipoRede: e.target.value })}
-          >
-            <option>Monofásica</option>
-            <option>Bifásica</option>
-            <option>Trifásica</option>
-          </Sel>
-        </Field>
-        <Field label="Código do transformador mais próximo">
-          <Inp
-            value={obra.transformador}
-            onChange={(e) =>
-              setObra({ ...obra, transformador: e.target.value })
-            }
-          />
-        </Field>
       </div>
     </Card>
   );
@@ -1218,7 +1216,7 @@ function TabBlocos({ ctx }) {
                   onChange={(e) =>
                     setTorre(bi, { demandaBloco: e.target.value })
                   }
-                  placeholder="Ex: 75"
+                  placeholder="0"
                 />
               </Field>
               <Field label={`Qtd. de UCs por ${atend.atendA}`} req>
@@ -1226,7 +1224,7 @@ function TabBlocos({ ctx }) {
                   type="number"
                   value={b.qtdUCs}
                   onChange={(e) => setTorre(bi, { qtdUCs: e.target.value })}
-                  placeholder="Ex: 48"
+                  placeholder="0"
                 />
               </Field>
               <Field label="Disjuntor do Condomínio / Sist. Combate Incêndio">
@@ -1251,7 +1249,7 @@ function TabBlocos({ ctx }) {
                   onChange={(e) =>
                     setTorre(bi, { demandaIncendio: e.target.value })
                   }
-                  placeholder="Ex: 15"
+                  placeholder="0"
                 />
               </Field>
             </div>
@@ -1306,7 +1304,7 @@ function TabBlocos({ ctx }) {
                               complemento: e.target.value,
                             })
                           }
-                          placeholder="Ex: 101"
+                          placeholder="999"
                         />
                       </Field>
                       <Field label="Nº Predial">
@@ -1728,7 +1726,7 @@ function TabUcsColetivo({ ctx }) {
                   </Sel>
                 </Field>
               )}
-              <Field label="Identificação" hint="Ex: Torre 1 - UC 1">
+              <Field label="Identificação" hint="Torre 1 - UC 1">
                 <Inp
                   value={u.identificacao}
                   onChange={(e) =>
@@ -1748,17 +1746,8 @@ function TabUcsColetivo({ ctx }) {
                   />
                 </Field>
               ) : (
-                <Field
-                  label="Nº Predial"
-                  hint={
-                    hibrido
-                      ? "ND 5.2: mesmo predial de Dados da Obra; diferencie pelo complemento."
-                      : "Igual ao número de Dados da Obra (mesmo para todas as UCs)."
-                  }
-                >
-                  <div className="readonly-val">
-                    {obra.num || "— informe o número em Dados da Obra"}
-                  </div>
+                <Field label="Nº Predial">
+                  <div className="readonly-val">{obra.num || "Nº Predial"}</div>
                 </Field>
               )}
               <Field label="Complemento" req={ucBlocos.length > 1}>
@@ -1767,14 +1756,14 @@ function TabUcsColetivo({ ctx }) {
                   onChange={(e) =>
                     setBloco(ui, { complemento: e.target.value })
                   }
-                  placeholder="Ex: 101"
+                  placeholder="999"
                 />
               </Field>
               <Field label="Caixa">
                 <Inp
                   value={u.caixa}
                   onChange={(e) => setBloco(ui, { caixa: e.target.value })}
-                  placeholder="Ex: Apartamento"
+                  placeholder="Apartamento"
                 />
               </Field>
               <Field label="Solicitação" req>
@@ -2001,13 +1990,8 @@ function TabUcsIndividual({ ctx }) {
                   }
                 />
               </Field>
-              <Field
-                label="Nº Predial"
-                hint="Igual ao número de Dados da Obra (mesmo para todas as UCs)."
-              >
-                <div className="readonly-val">
-                  {obra.num || "— informe o número em Dados da Obra"}
-                </div>
+              <Field label="Nº Predial">
+                <div className="readonly-val">{obra.num || "Nº Predial"}</div>
               </Field>
               <Field label="Complemento" req={ucsDet.length > 1}>
                 <Inp
@@ -2015,7 +1999,7 @@ function TabUcsIndividual({ ctx }) {
                   onChange={(e) =>
                     setUcDet(ui, { complemento: e.target.value })
                   }
-                  placeholder="Ex: Casa 1"
+                  placeholder="Casa 1"
                 />
               </Field>
               <Field label="Caixa / Identificação">
@@ -2034,17 +2018,7 @@ function TabUcsIndividual({ ctx }) {
                       }
                     />
                   </Field>
-                  <Field label="Mudança de local">
-                    <Toggle
-                      value={u.mudancaLocal}
-                      onChange={(v) => setUcDet(ui, { mudancaLocal: v })}
-                      options={[
-                        { v: "Sim", l: "Sim" },
-                        { v: "Não", l: "Não" },
-                      ]}
-                    />
-                  </Field>
-                  <Field label="Disjuntor De (atual)">
+                  <Field label="Disjuntor atual">
                     <Sel
                       value={u.disjDe}
                       onChange={(e) => setUcDet(ui, { disjDe: e.target.value })}
@@ -2056,6 +2030,16 @@ function TabUcsIndividual({ ctx }) {
                         </option>
                       ))}
                     </Sel>
+                  </Field>
+                  <Field label="Mudança de local">
+                    <Toggle
+                      value={u.mudancaLocal}
+                      onChange={(v) => setUcDet(ui, { mudancaLocal: v })}
+                      options={[
+                        { v: "Sim", l: "Sim" },
+                        { v: "Não", l: "Não" },
+                      ]}
+                    />
                   </Field>
                 </React.Fragment>
               )}

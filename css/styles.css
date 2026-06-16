@@ -4,21 +4,29 @@
    ============================================================ */
 
 :root {
-  --verde: #018837;
-  --verde-escuro: #00592a;
-  --verde-cemig: #016f22;
-  --verde-claro: #e8f3ec;
-  --verde-acento: #00a84f;
+  /* ===== Paleta oficial CEMIG — Manual de Marca 2022 ===== */
+  --verde-escuro: #0a2f27;   /* Verde Escuro */
+  --verde-cemig: #107761;    /* Novo Verde Institucional */
+  --verde: #107761;
+  --verde-acento: #107761;
+  --verde-claro: #e6f2ee;    /* tom claro do institucional */
+  --verde-digital: #1eff8c;  /* Verde Digital */
+  --verde-on: #c4ff3f;       /* Verde On */
+  --amarelo-inst: #f9af16;   /* Amarelo Institucional */
+  --amarelo-vivo: #fff540;   /* Amarelo Vivo */
+  --grad-marca: linear-gradient(90deg, #1eff8c 0%, #c4ff3f 100%);
+  --grad-amarelo: linear-gradient(90deg, #f9af16 0%, #fff540 100%);
+
   --bg: #f4f6f7;
   --card: #ffffff;
-  --borda: #e1e6e9;
-  --input-bg: #f8fafb;
-  --texto: #1c2733;
-  --texto-suave: #6a7682;
+  --borda: #dde4e2;
+  --input-bg: #f7faf9;
+  --texto: #16302a;
+  --texto-suave: #5f7068;
   --vermelho: #c0392b;
   --vermelho-bg: #fdecea;
-  --amarelo-bg: #fff8e6;
-  --amarelo-bd: #f0d48a;
+  --amarelo-bg: #fff6e0;
+  --amarelo-bd: #f3d488;
   --sombra: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --sombra-md: 0 4px 16px rgba(0, 0, 0, 0.08);
   --raio: 12px;
@@ -44,7 +52,8 @@ body {
 /* ---------- TOPBAR ---------- */
 .topbar {
   background: var(--verde-escuro);
-  border-bottom: 3px solid var(--verde);
+  border-bottom: 3px solid;
+  border-image: var(--grad-marca) 1;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -169,7 +178,10 @@ body {
 }
 .vstep-label { font-size: 13.5px; font-weight: 600; color: var(--texto-suave); }
 .vstep.active { background: var(--verde-claro); }
-.vstep.active .vstep-num { background: var(--verde); color: #fff; }
+.vstep.active .vstep-num {
+  background: var(--grad-marca);
+  color: var(--verde-escuro);
+}
 .vstep.active .vstep-label { color: var(--verde-escuro); font-weight: 700; }
 .vstep.done .vstep-num { background: var(--verde-acento); color: #fff; }
 .vstep.done .vstep-label { color: var(--texto); }
