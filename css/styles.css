@@ -841,3 +841,63 @@ input[type="number"] { -moz-appearance: textfield; }
   font-weight: 700;
   color: var(--verde-escuro);
 }
+
+/* ===== Mapa do endereço da obra (Leaflet) ===== */
+.mapa-obra {
+  margin-top: 14px;
+}
+.mapa-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.mapa-canvas {
+  height: 320px;
+  width: 100%;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-sm);
+  background: var(--input-bg);
+  z-index: 0;
+}
+.mapa-canvas .leaflet-control-attribution {
+  font-size: 10px;
+}
+
+/* ===== Consulta de restrição ambiental (IDE-Sisema) ===== */
+.restricao-amb {
+  margin-top: 14px;
+}
+.restricao-result {
+  margin-top: 8px;
+}
+.restricao-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.restricao-chips .chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  background: var(--input-bg);
+  color: var(--texto-suave);
+}
+.restricao-chips .chip-on {
+  background: var(--vermelho-bg);
+  border-color: var(--vermelho);
+  color: var(--vermelho);
+}
+.restricao-chips .chip-off {
+  background: var(--verde-claro);
+  border-color: var(--verde-acento);
+  color: var(--verde-cemig);
+}
+.restricao-chips .chip-err {
+  background: var(--amarelo-bg);
+  border-color: var(--amarelo-bd);
+  color: #8a6d1a;
+}
