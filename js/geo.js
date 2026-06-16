@@ -215,9 +215,7 @@ function RestricaoAmbiental({ obra }) {
           </div>
           {algumaErro && (
             <div className="field-hint" style={{ marginTop: 8 }}>
-              Falhas geralmente são CORS (GeoServer sem cabeçalho de origem
-              cruzada) ou nome de camada/endpoint incorreto. Confirme o WFS no
-              GetCapabilities e, se necessário, use um proxy/back-end.
+              Erro no servidor, tente novamente mais tarde.
             </div>
           )}
         </div>

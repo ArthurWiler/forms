@@ -237,11 +237,7 @@ function TabTipo({ ctx }) {
             ))}
           </Sel>
         </Field>
-        <Field
-          label="Escopo do Atendimento"
-          req
-          hint="As opções dependem da solicitação escolhida."
-        >
+        <Field label="Escopo do Atendimento" req>
           <Sel
             value={atend.escopo}
             onChange={(e) => setAtend({ ...atend, escopo: e.target.value })}
@@ -263,11 +259,7 @@ function TabTipo({ ctx }) {
                 ]}
               />
             </Field>
-            <Field
-              label="Nº de Blocos / Torres"
-              req
-              hint="Cada bloco terá disjuntor geral próprio e disjuntor de combate a incêndio."
-            >
+            <Field label="Nº de Blocos / Torres" req>
               <Inp
                 type="number"
                 value={atend.nBlocos}
@@ -295,15 +287,7 @@ function TabTipo({ ctx }) {
           />
         </Field>
         {!multiTorres && (
-          <Field
-            label="Nº de Unidades Consumidoras"
-            req
-            hint={
-              coletivo
-                ? "Será gerado um bloco de identificação para cada UC."
-                : "Individual: até 3 caixas. Cada UC terá identificação e detalhamento de cargas."
-            }
-          >
+          <Field label="Nº de Unidades Consumidoras" req>
             <Inp
               type="number"
               value={atend.nUCs}
@@ -836,11 +820,7 @@ function TabObra({ ctx }) {
           />
         </Field>
         {coletivo && (
-          <Field
-            label="Nº ART/TRT de Projeto"
-            req
-            hint="Obrigatório para atendimentos via APR Web."
-          >
+          <Field label="Nº ART/TRT de Projeto" req>
             <Inp
               value={obra.art}
               onChange={(e) => setObra({ ...obra, art: e.target.value })}
@@ -1592,11 +1572,7 @@ function TabUcsColetivo({ ctx }) {
                 ))}
               </Sel>
             </Field>
-            <Field
-              label="Disjuntor geral novo"
-              req
-              hint={`Opções acima da maior faixa das UCs (${maiorCorrenteUC || "—"} A).`}
-            >
+            <Field label="Disjuntor geral novo" req>
               <Sel
                 value={atend.disjuntorGeral}
                 onChange={(e) =>
@@ -1621,10 +1597,7 @@ function TabUcsColetivo({ ctx }) {
                 placeholder="0,0"
               />
             </Field>
-            <Field
-              label="Demanda futura (kVA)"
-              hint="Calculada automaticamente: soma das demandas previstas das UCs."
-            >
+            <Field label="Demanda futura (kVA)">
               <div className="readonly-val">{fmt2(demandaPrevTotal)} kVA</div>
             </Field>
           </div>
@@ -1713,10 +1686,7 @@ function TabUcsColetivo({ ctx }) {
             </div>
             <div className="grid grid-3">
               {hibrido && (
-                <Field
-                  label="Norma de atendimento"
-                  hint="ND 5.1 = unidade isolada (predial distinto). ND 5.2 = agrupamento (mesmo predial, varia só o complemento)."
-                >
+                <Field label="Norma de atendimento">
                   <Sel
                     value={u.nd}
                     onChange={(e) => setBloco(ui, { nd: e.target.value })}
@@ -1726,7 +1696,7 @@ function TabUcsColetivo({ ctx }) {
                   </Sel>
                 </Field>
               )}
-              <Field label="Identificação" hint="Torre 1 - UC 1">
+              <Field label="Identificação">
                 <Inp
                   value={u.identificacao}
                   onChange={(e) =>
@@ -1735,11 +1705,7 @@ function TabUcsColetivo({ ctx }) {
                 />
               </Field>
               {hibrido && u.nd === "5.1" ? (
-                <Field
-                  label="Nº Predial"
-                  req
-                  hint="ND 5.1: deve ser distinto entre as UCs 5.1."
-                >
+                <Field label="Nº Predial" req hint="Distinto entre as UCs">
                   <Inp
                     value={u.nPredial}
                     onChange={(e) => setBloco(ui, { nPredial: e.target.value })}
@@ -2484,8 +2450,7 @@ function TabGerador({ ctx }) {
           </Field>
           <div className="col-span-2 callout">
             O gerador de emergência opera de forma isolada (sem paralelismo com
-            a rede CEMIG). Caso haja paralelismo ou injeção, o atendimento deve
-            ser tratado como Geração Distribuída.
+            a rede CEMIG).
           </div>
         </div>
       )}

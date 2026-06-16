@@ -37,17 +37,28 @@ function gerarPdfDoc(S) {
     CW = PW - 2 * MG;
   let cy = MG;
   const drawTopBar = () => {
-    doc.setFillColor(0, 89, 42);
+    doc.setFillColor(10, 47, 39);
     doc.rect(0, 0, PW, 18, "F");
-    doc.setFillColor(1, 136, 55);
-    doc.rect(0, 0, 4, 18, "F");
+    // Linha de gradiente da marca (verde digital -> verde on) sob a barra
+    {
+      const gy = 18,
+        gh = 1.3,
+        steps = 60;
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const r = Math.round(30 + (196 - 30) * t);
+        const b = Math.round(140 + (63 - 140) * t);
+        doc.setFillColor(r, 255, b);
+        doc.rect((PW / steps) * i, gy, PW / steps + 0.3, gh, "F");
+      }
+    }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255);
     doc.text("Formulário CEMIG - Orçamento de Conexão BT", MG, 8);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
-    doc.setTextColor(150, 210, 175);
+    doc.setTextColor(169, 230, 191);
     doc.text(
       multiTorres
         ? "Empreendimento com Múltiplas Torres ou Blocos"
@@ -88,13 +99,13 @@ function gerarPdfDoc(S) {
   };
   const sec = (t) => {
     checkSpace(11);
-    doc.setFillColor(232, 243, 236);
+    doc.setFillColor(230, 242, 238);
     doc.rect(MG, cy, CW, 7, "F");
-    doc.setFillColor(1, 136, 55);
+    doc.setFillColor(16, 119, 98);
     doc.rect(MG, cy, 2.5, 7, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.setTextColor(0, 70, 33);
+    doc.setTextColor(16, 119, 98);
     doc.text(t, MG + 5, cy + 4.8);
     cy += 9;
   };
@@ -145,22 +156,22 @@ function gerarPdfDoc(S) {
   };
   const totRow = (label, val) => {
     checkSpace(8);
-    doc.setFillColor(1, 136, 55);
+    doc.setFillColor(16, 119, 98);
     doc.rect(MG, cy, CW, 7.5, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.setTextColor(230, 249, 213);
+    doc.setTextColor(255, 255, 255);
     doc.text(label, MG + 5, cy + 5.2);
     doc.text(val, MG + CW - 2, cy + 5.2, { align: "right" });
     cy += 9;
   };
   const tabela = (headers, widths, rows) => {
     checkSpace(6);
-    doc.setFillColor(215, 218, 226);
+    doc.setFillColor(230, 242, 238);
     doc.rect(MG, cy, CW, 5.5, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(90, 96, 115);
+    doc.setTextColor(16, 119, 98);
     let x = MG + 2;
     headers.forEach((h, i) => {
       doc.text(h, x, cy + 3.8);
@@ -171,9 +182,9 @@ function gerarPdfDoc(S) {
     rows.forEach((row) => {
       checkSpace(5);
       doc.setFillColor(
-        ri % 2 ? 247 : 255,
-        ri % 2 ? 248 : 255,
-        ri % 2 ? 251 : 255,
+        ri % 2 ? 240 : 255,
+        ri % 2 ? 246 : 255,
+        ri % 2 ? 244 : 255,
       );
       doc.rect(MG, cy, CW, 5, "F");
       doc.setFont("helvetica", "normal");
@@ -388,7 +399,7 @@ function gerarPdfDoc(S) {
       checkSpace(6);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.setTextColor(0, 70, 33);
+      doc.setTextColor(16, 119, 98);
       doc.text(`${u.identificacao || "UC " + (ui + 1)}`, MG + 1, cy + 4);
       cy += 6;
       const pares = [
