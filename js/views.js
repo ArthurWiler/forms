@@ -959,6 +959,16 @@ function TabObra({ ctx }) {
         </div>
       )}
       <div className="grid grid-2 divider">
+        <Field label="Distância padrão→rede CEMIG inferior a 30 m?">
+          <Toggle
+            value={obra.distMenor30}
+            onChange={(v) => setObra({ ...obra, distMenor30: v })}
+            options={[
+              { v: "Sim", l: "Sim" },
+              { v: "Não", l: "Não" },
+            ]}
+          />
+        </Field>
         <Field
           label={coordObrigatoria ? "Latitude" : "Latitude — opcional"}
           req={coordObrigatoria}
@@ -981,16 +991,6 @@ function TabObra({ ctx }) {
             placeholder="-43.9385"
           />
         </Field>
-        <Field label="Distância padrão→rede CEMIG inferior a 30 m?">
-          <Toggle
-            value={obra.distMenor30}
-            onChange={(v) => setObra({ ...obra, distMenor30: v })}
-            options={[
-              { v: "Sim", l: "Sim" },
-              { v: "Não", l: "Não" },
-            ]}
-          />
-        </Field>
       </div>
       {coordObrigatoria && !coordPreenchida && (
         <div className="alert alert-warn" style={{ marginTop: 8 }}>
@@ -999,31 +999,27 @@ function TabObra({ ctx }) {
         </div>
       )}
       <LocalizacaoObra obra={obra} setObra={setObra} />
+      <div className="field" style={{ marginTop: 14 }}>
+        <label>Unidade consumidora em área de restrição ambiental?</label>
+        <div className="readonly-val">
+          {obra.restricaoAmbiental || "— consulte a coordenada no mapa"}
+        </div>
+        {obra.restricaoAmbiental === "Sim" && (
+          <span className="field-hint">
+            {obra.restricoesTexto
+              ? "Restrições ambientais: " + obra.restricoesTexto
+              : "Há restrição ambiental."}
+          </span>
+        )}
+        {obra.restricaoAmbiental === "Não" && (
+          <span className="field-hint">Não há restrição ambiental.</span>
+        )}
+      </div>
       <div className="grid grid-2 divider">
         <Field label="O padrão está pronto para ser ligado?" req>
           <Toggle
             value={obra.prontoLigar}
             onChange={(v) => setObra({ ...obra, prontoLigar: v })}
-            options={[
-              { v: "Sim", l: "Sim" },
-              { v: "Não", l: "Não" },
-            ]}
-          />
-        </Field>
-        <Field label="UC em Área de Preservação Permanente (APP)?">
-          <Toggle
-            value={obra.app}
-            onChange={(v) => setObra({ ...obra, app: v })}
-            options={[
-              { v: "Sim", l: "Sim" },
-              { v: "Não", l: "Não" },
-            ]}
-          />
-        </Field>
-        <Field label="UC em Reserva Legal?">
-          <Toggle
-            value={obra.reservaLegal}
-            onChange={(v) => setObra({ ...obra, reservaLegal: v })}
             options={[
               { v: "Sim", l: "Sim" },
               { v: "Não", l: "Não" },

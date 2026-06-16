@@ -278,8 +278,8 @@ function gerarPdfDoc(S) {
   obraPairs.push(
     ["Coordenadas", [obra.lat, obra.lng].filter(Boolean).join(", ")],
     ["Padrão pronto p/ ligar?", obra.prontoLigar],
-    ["Em APP?", obra.app],
-    ["Reserva Legal?", obra.reservaLegal],
+    ["Em área de restrição ambiental?", obra.restricaoAmbiental],
+    ["Restrições ambientais", obra.restricoesTexto],
     ["Tipo de rede BT", obra.tipoRede],
     ["Distância < 30 m da rede?", obra.distMenor30],
     ["Transformador próximo", obra.transformador],

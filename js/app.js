@@ -60,8 +60,8 @@ function App() {
   const [obra, setObra] = useState({
     art: "",
     prontoLigar: "Não",
-    app: "Não",
-    reservaLegal: "Não",
+    restricaoAmbiental: "", // autopreenchido após a consulta (Sim/Não)
+    restricoesTexto: "", // descrição das restrições encontradas
     endereco: "",
     num: "",
     compl: "",
