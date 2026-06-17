@@ -502,7 +502,10 @@ function App() {
   const demandaTotalGeral = useMemo(() => {
     if (multiTorres)
       return blocos.reduce(
-        (s, b) => s + num(b.demandaBloco) + num(b.demandaIncendio),
+        (s, b) =>
+          s +
+          (b.ucs || []).reduce((su, u) => su + num((u.prev || {}).demanda), 0) +
+          num(b.demandaIncendio),
         0,
       );
     if (coletivo) return demandaPrevTotal;

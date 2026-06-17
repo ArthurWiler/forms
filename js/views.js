@@ -1231,13 +1231,17 @@ function TabBlocos({ ctx }) {
                   ))}
                 </Sel>
               </Field>
-              <Field label={`Demanda do ${atend.atendA} (kVA)`} req>
+              <Field label={`Demanda do ${atend.atendA} (kVA)`}>
                 <Inp
-                  type="number"
-                  value={b.demandaBloco}
-                  onChange={(e) =>
-                    setTorre(bi, { demandaBloco: e.target.value })
-                  }
+                  type="text"
+                  readOnly
+                  disabled
+                  value={fmt2(
+                    (b.ucs || []).reduce(
+                      (s, u) => s + num((u.prev || {}).demanda),
+                      0,
+                    ),
+                  )}
                   placeholder="0"
                 />
               </Field>
@@ -1245,7 +1249,7 @@ function TabBlocos({ ctx }) {
                 <Inp
                   type="number"
                   value={b.qtdUCs}
-                  onChange={(e) => setTorre(bi, { qtdUCs: e.target.value })}
+                  onChange={(e) => sincronizarUCsTorre(bi, e.target.value)}
                   placeholder="0"
                 />
               </Field>
@@ -2747,7 +2751,13 @@ function TabRevisar({ ctx }) {
                   {b.disjIncendio || "—"}
                 </span>
                 <span style={{ color: "var(--verde)", fontWeight: 700 }}>
-                  {fmt2(num(b.demandaBloco) + num(b.demandaIncendio))} kVA
+                  {fmt2(
+                    (b.ucs || []).reduce(
+                      (s, u) => s + num((u.prev || {}).demanda),
+                      0,
+                    ) + num(b.demandaIncendio),
+                  )}{" "}
+                  kVA
                 </span>
               </div>
             ))}

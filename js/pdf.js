@@ -357,7 +357,7 @@ function gerarPdfDoc(S) {
       [
         "Bloco",
         "Disjuntor Geral",
-        "Dem. Bloco (kVA)",
+        "Dem. UCs (kVA)",
         "Qtd UCs",
         "Disj. Cond./Incêndio",
         "Dem. Cond. (kVA)",
@@ -366,7 +366,9 @@ function gerarPdfDoc(S) {
       blocos.map((b) => [
         b.nome,
         b.disjGeral,
-        b.demandaBloco,
+        fmt2(
+          (b.ucs || []).reduce((s, u) => s + num((u.prev || {}).demanda), 0),
+        ),
         b.qtdUCs,
         b.disjIncendio,
         b.demandaIncendio,
@@ -375,49 +377,34 @@ function gerarPdfDoc(S) {
     cy += 2;
     totRow("DEMANDA TOTAL DO EMPREENDIMENTO", `${fmt2(demandaTotalGeral)} kVA`);
     cy += 2;
-    // Detalhamento das UCs de cada torre/bloco
+    // Detalhamento das UCs de cada torre/bloco — uma linha por UC
     blocos.forEach((b, bi) => {
       const ucs = b.ucs || [];
       if (!ucs.length) return;
+      const demBloco = ucs.reduce((s, u) => s + num((u.prev || {}).demanda), 0);
       sec(
         `4.${bi + 1}  ${atend.atendA.toUpperCase()} ${b.nome || bi + 1} — UNIDADES CONSUMIDORAS`,
       );
       tabela(
         [
-          "UC",
-          "Complemento",
-          "Nº Predial",
+          "Unidade",
+          "Compl.",
           "Solicitação",
-          "Atividade",
-          "Instalação",
           "Disjuntor",
-        ],
-        [26, 24, 22, 32, 24, 24, 30],
-        ucs.map((u) => [
-          u.identificacao,
-          u.complemento,
-          u.nPredial,
-          u.solicitacao,
-          u.atividade,
-          u.solicitacao !== "Conexão Nova" ? u.instalacao : "—",
-          u.disjPara,
-        ]),
-      );
-      cy += 1;
-      tabela(
-        [
-          "UC",
           "Ilum.",
           "Tomada",
-          "Chuveiro",
+          "Chuv.",
           "Ar",
           "Outros",
           "Carga (kW)",
           "Dem. (kVA)",
         ],
-        [26, 18, 20, 22, 16, 18, 24, 24],
-        ucs.map((u) => [
-          u.identificacao,
+        [22, 16, 26, 18, 14, 16, 14, 12, 14, 20, 20],
+        ucs.map((u, ui) => [
+          u.identificacao || `UC ${ui + 1}`,
+          u.complemento || "—",
+          u.solicitacao,
+          u.disjPara || "—",
           (u.prev || {}).ilum || "—",
           (u.prev || {}).tomada || "—",
           (u.prev || {}).chuveiro || "—",
@@ -427,6 +414,16 @@ function gerarPdfDoc(S) {
           (u.prev || {}).demanda || "—",
         ]),
       );
+      cy += 1;
+      totRow(
+        `Demanda das UCs · ${atend.atendA} ${b.nome || bi + 1}`,
+        `${fmt2(demBloco)} kVA`,
+      );
+      if (num(b.demandaIncendio) > 0)
+        totRow(
+          `Demanda combate a incêndio · ${atend.atendA} ${b.nome || bi + 1}`,
+          `${fmt2(num(b.demandaIncendio))} kVA`,
+        );
       cy += 2;
     });
   } else if (coletivo) {
