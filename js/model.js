@@ -172,3 +172,207 @@ const blocoPadrao = (i) => ({
   demandaIncendio: "",
   ucs: [ucTorrePadrao(0)],
 });
+
+// ============================================================
+// CATÁLOGO DE MODALIDADES (tela inicial)
+// Cada modalidade aplica uma pré-configuração ao fluxo BT.
+// status: "ok" abre o formulário | "soon" = Em breve
+// img: PNG esperado em imgs/ (gerado pelo usuário)
+// prefill: ajustes aplicados a atend/obra ao selecionar
+// ============================================================
+const MODALIDADES_SECOES = [
+  {
+    titulo: "Residencial · Comercial · Rural — Baixa Tensão",
+    cards: [
+      {
+        id: "casa50",
+        nome: "Casa até 50m²",
+        sub: "Monofásico 63 A",
+        img: "imgs/mod-casa-50.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Não",
+            solicitacao: SOLICITACOES[0],
+            escopo: "Ligação Nova",
+          },
+          obra: { tipoRede: "Monofásica", localizacao: "Urbana" },
+        },
+      },
+      {
+        id: "casa100",
+        nome: "Casa até 100m²",
+        sub: "Bifásico 63 A",
+        img: "imgs/mod-casa-100.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Não",
+            solicitacao: SOLICITACOES[0],
+            escopo: "Ligação Nova",
+          },
+          obra: { tipoRede: "Bifásica", localizacao: "Urbana" },
+        },
+      },
+      {
+        id: "casaluxo",
+        nome: "Casa > 100m²",
+        sub: "Baixa Tensão",
+        img: "imgs/mod-casa-luxo.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Não",
+            solicitacao: SOLICITACOES[0],
+            escopo: "Ligação Nova",
+          },
+          obra: { tipoRede: "Trifásica", localizacao: "Urbana" },
+        },
+      },
+      {
+        id: "comercio",
+        nome: "Comércio",
+        sub: "Baixa Tensão (BT)",
+        img: "imgs/mod-comercio.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Não",
+            solicitacao: SOLICITACOES[0],
+            escopo: "Ligação Nova",
+          },
+          obra: { tipoRede: "Trifásica", localizacao: "Urbana" },
+        },
+      },
+      {
+        id: "industriabt",
+        nome: "Indústria",
+        sub: "Baixa Tensão (BT)",
+        img: "imgs/mod-industria-bt.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Não",
+            solicitacao: SOLICITACOES[0],
+            escopo: "Ligação Nova",
+          },
+          obra: { tipoRede: "Trifásica", localizacao: "Urbana" },
+        },
+      },
+      {
+        id: "rural",
+        nome: "Rural",
+        sub: "Baixa Tensão (BT)",
+        img: "imgs/mod-rural.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Não",
+            solicitacao: SOLICITACOES[0],
+            escopo: "Ligação Nova",
+          },
+          obra: { tipoRede: "Trifásica", localizacao: "Rural" },
+        },
+      },
+    ],
+  },
+  {
+    titulo: "Empreendimentos — Baixa Tensão",
+    cards: [
+      {
+        id: "loteamento",
+        nome: "Loteamento",
+        sub: "Baixa Tensão (BT)",
+        img: "imgs/mod-loteamento.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Sim",
+            solicitacao: SOLICITACOES[2],
+            escopo: "Ligação Nova",
+            nUCs: 2,
+          },
+          obra: { tipoRede: "Trifásica", localizacao: "Urbana" },
+        },
+      },
+      {
+        id: "condominiotorres",
+        nome: "Condomínio de torres",
+        sub: "Baixa Tensão (BT)",
+        img: "imgs/mod-condominio-torres.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Sim",
+            solicitacao: SOLICITACOES[4],
+            escopo: "Ligação Nova",
+            atendA: "Torre",
+            nBlocos: 2,
+          },
+          obra: { tipoRede: "Trifásica", localizacao: "Urbana" },
+        },
+      },
+      {
+        id: "coletivo",
+        nome: "Atendimento coletivo",
+        sub: "Baixa Tensão (BT)",
+        img: "imgs/mod-coletivo.png",
+        status: "ok",
+        prefill: {
+          atend: {
+            disjGeral: "Sim",
+            solicitacao: SOLICITACOES[2],
+            escopo: "Ligação Nova",
+            nUCs: 2,
+          },
+          obra: { tipoRede: "Trifásica", localizacao: "Urbana" },
+        },
+      },
+    ],
+  },
+  {
+    titulo: "Média Tensão",
+    cards: [
+      {
+        id: "mt-industria",
+        nome: "Indústria",
+        sub: "Média Tensão (MT)",
+        img: "imgs/mod-mt-industria.png",
+        status: "soon",
+      },
+      {
+        id: "mt-outros",
+        nome: "Outros estabelecimentos",
+        sub: "Média Tensão (MT)",
+        img: "imgs/mod-mt-outros.png",
+        status: "soon",
+      },
+      {
+        id: "mt-irrigante",
+        nome: "Irrigante",
+        sub: "Média Tensão (MT)",
+        img: "imgs/mod-mt-irrigante.png",
+        status: "soon",
+      },
+    ],
+  },
+  {
+    titulo: "Geração Distribuída",
+    cards: [
+      {
+        id: "gd-micro",
+        nome: "Microgeração",
+        sub: "Baixa Tensão (BT)",
+        img: "imgs/mod-gd-micro.png",
+        status: "soon",
+      },
+      {
+        id: "gd-mini",
+        nome: "Minigeração",
+        sub: "Média Tensão (MT)",
+        img: "imgs/mod-gd-mini.png",
+        status: "soon",
+      },
+    ],
+  },
+];

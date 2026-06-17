@@ -634,6 +634,27 @@ function App() {
     });
   };
 
+  // Seleciona uma modalidade da tela inicial e pré-configura o fluxo BT
+  const selectModalidade = (card) => {
+    if (card.status === "soon") {
+      setModalidade(card.id); // tela "em breve"
+      return;
+    }
+    if (card.prefill) {
+      if (card.prefill.atend)
+        setAtend((s) => ({ ...s, ...card.prefill.atend }));
+      if (card.prefill.obra) setObra((s) => ({ ...s, ...card.prefill.obra }));
+    }
+    setAba("orient");
+    setModalidade("BT"); // todos os cards habilitados entram no fluxo BT
+  };
+
+  // Lista plana de cards (para detectar "em breve" e voltar)
+  const todasModalidades = MODALIDADES_SECOES.flatMap((s) => s.cards);
+  const modSoon = todasModalidades.find(
+    (c) => c.id === modalidade && c.status === "soon",
+  );
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -737,48 +758,61 @@ function App() {
       {!modalidade ? (
         <div className="modalidade-screen">
           <div className="modalidade-head">
-            <h1>Selecione o tipo de solicitação</h1>
+            <h1>Selecione a modalidade de atendimento</h1>
             <p>
-              Escolha a modalidade de atendimento para iniciar o preenchimento.
+              Escolha a modalidade para iniciar o preenchimento. Alguns campos
+              do formulário já vêm pré-configurados conforme a opção.
             </p>
           </div>
-          <div className="modalidade-grid">
-            <button
-              className="modalidade-card"
-              onClick={() => setModalidade("BT")}
-            >
-              <span className="modalidade-tag">Disponível</span>
-              <h2>Atendimento em Baixa Tensão</h2>
-              <p>Ligação nova ou alteração de carga em BT (ND-5.1 / ND-5.2).</p>
-            </button>
-            <button
-              className="modalidade-card soon"
-              onClick={() => setModalidade("MT")}
-            >
-              <span className="modalidade-tag">Em breve</span>
-              <h2>Atendimento em Média Tensão</h2>
-              <p>Conexão em Média Tensão. Em desenvolvimento.</p>
-            </button>
-            <button
-              className="modalidade-card soon"
-              onClick={() => setModalidade("GD")}
-            >
-              <span className="modalidade-tag">Em breve</span>
-              <h2>Solicitação de Geração Distribuída</h2>
-              <p>Microgeração / minigeração distribuída. Em desenvolvimento.</p>
-            </button>
-          </div>
+          {MODALIDADES_SECOES.map((sec) => (
+            <div className="modalidade-secao" key={sec.titulo}>
+              <h2 className="modalidade-secao-titulo">{sec.titulo}</h2>
+              <div className="modalidade-grid">
+                {sec.cards.map((card) => (
+                  <button
+                    key={card.id}
+                    className={
+                      "modalidade-card" +
+                      (card.status === "soon" ? " soon" : "")
+                    }
+                    disabled={card.status === "soon"}
+                    onClick={() => selectModalidade(card)}
+                  >
+                    <span
+                      className={
+                        "modalidade-tag" +
+                        (card.status === "soon" ? "" : " avail")
+                      }
+                    >
+                      {card.status === "soon" ? "Em breve" : "Disponível"}
+                    </span>
+                    <span className="modalidade-img">
+                      <img
+                        src={card.img}
+                        alt={card.nome}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.parentNode.classList.add("ph");
+                        }}
+                      />
+                    </span>
+                    <span className="modalidade-card-body">
+                      <strong>{card.nome}</strong>
+                      <span className="modalidade-sub">{card.sub}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-      ) : modalidade !== "BT" ? (
+      ) : modSoon ? (
         <div className="modalidade-soon">
-          <h1>
-            {modalidade === "MT"
-              ? "Atendimento em Média Tensão"
-              : "Solicitação de Geração Distribuída"}
-          </h1>
+          <h1>{modSoon.nome}</h1>
           <p>
-            Esta modalidade ainda está em desenvolvimento e será disponibilizada
-            em breve.
+            Esta modalidade ({modSoon.sub}) ainda está em desenvolvimento e será
+            disponibilizada em breve.
           </p>
           <Btn variant="primary" onClick={() => setModalidade(null)}>
             ← Voltar à seleção
